@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.1
+// @version             1.7.2
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -101,41 +101,50 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
 
-    // Find "+ Прив'язати до Google" button — in "Зовнішні сервіси" section
+    // Find "+ Прив'язати до Google" button — search everywhere
     function findLinkBtn() {
         const panel = document.querySelector('#edit-panel') || document.body;
 
-        // Find "Зовнішні сервіси" section first
-        const sections = panel.querySelectorAll('div, section, fieldset');
-        let googleSection = null;
-        for (const sec of sections) {
-            const t = (sec.textContent || '').toLowerCase();
-            if (t.includes('зовнішні') && t.includes('сервіс') && t.length < 800) {
-                googleSection = sec;
-                break;
-            }
-        }
-        if (!googleSection) { console.log(L, 'Section not found for button'); return null; }
-
-        // Find clickable element with "прив" text within this section
-        const els = googleSection.querySelectorAll('a, button, span, div, label');
-        for (const el of els) {
-            const t = (el.textContent || '').trim();
-            if (t.length > 60) continue;
-            if (t.match(/^\+?\s*прив/i) && t.toLowerCase().includes('google')) {
-                console.log(L, 'Button found:', t, el.tagName); return el;
-            }
-        }
-
-        // XPath within section
+        // 1. XPath: find ANY element containing "Прив" and "Google"
         const xp = document.evaluate(
-            './/a[contains(text(),"Прив")] | .//button[contains(text(),"Прив")] | .//span[contains(text(),"Прив")]',
-            googleSection, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null
+            '//*[contains(text(),"Прив") and contains(text(),"Google")]',
+            panel, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null
         );
+        console.log(L, 'XPath results:', xp.snapshotLength);
         for (let i = 0; i < xp.snapshotLength; i++) {
             const el = xp.snapshotItem(i);
-            if ((el.textContent || '').trim().length < 60) {
-                console.log(L, 'XPath button:', el.textContent?.trim()); return el;
+            const t = (el.textContent || '').trim();
+            console.log(L, '  XPath:', t.substring(0, 50), '| tag:', el.tagName, '| len:', t.length);
+            if (t.length < 80) { return el; }
+        }
+
+        // 2. Walk ALL elements, check direct text
+        const all = panel.querySelectorAll('*');
+        for (const el of all) {
+            const own = Array.from(el.childNodes)
+                .filter(n => n.nodeType === 3)
+                .map(n => n.textContent.trim()).join(' ');
+            if (own.length < 60 && own.match(/прив/i) && own.match(/google/i)) {
+                console.log(L, 'Direct text:', own, el.tagName); return el;
+            }
+        }
+
+        // 3. Full text match on short elements
+        for (const el of all) {
+            const t = (el.textContent || '').trim();
+            if (t.length > 80) continue;
+            const low = t.toLowerCase();
+            if (low.includes('прив') && low.includes('google')) {
+                console.log(L, 'Full text match:', t.substring(0, 50), el.tagName); return el;
+            }
+        }
+
+        // 4. Debug: dump all text that contains "Google"
+        console.log(L, '--- Elements with "Google" text ---');
+        for (const el of all) {
+            const t = (el.textContent || '').trim();
+            if (t.length < 100 && t.toLowerCase().includes('google')) {
+                console.log(L, '  >', t.substring(0, 60), '|', el.tagName, '| children:', el.children.length);
             }
         }
 

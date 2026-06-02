@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.2.1
+// @version             1.2.2
 // @description         Auto-search and link Google POI by venue address in WME
 // @description:uk      Автопошук та прив'язка Google POI за адресою POI у WME
 // @author              EdjOne
@@ -130,11 +130,26 @@
         try {
             const address = sdk.DataModel.Venues.getAddress({ venueId });
             const parts = [];
-            if (address.street?.name) parts.push(address.street.name);
+
+            // Street name (try English if available for better Google results)
+            if (address.street?.englishName) {
+                parts.push(address.street.englishName);
+            } else if (address.street?.name) {
+                parts.push(address.street.name);
+            }
+
+            // House number
             if (address.houseNumber) parts.push(address.houseNumber);
+
+            // City — critical for Google search
             if (address.city?.name) parts.push(address.city.name);
+
+            // State/region
             if (address.state?.name) parts.push(address.state.name);
+
+            // Country
             if (address.country?.name) parts.push(address.country.name);
+
             return parts.join(', ');
         } catch (e) {
             console.warn(LOG_PREFIX, 'buildSearchQuery failed:', e);

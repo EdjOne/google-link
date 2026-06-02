@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.6.0
+// @version             1.6.1
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -107,8 +107,8 @@
 
         const p = document.createElement('div');
         p.id = 'gl-p';
-        p.style.cssText = 'position:fixed;top:80px;right:20px;width:380px;max-height:500px;background:#fff;border:1px solid #ccc;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:10000;font:13px/1.4 Arial;overflow:hidden;';
-        p.innerHTML = `<div style="background:#4285f4;color:#fff;padding:8px 12px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;"><span>🔍 ${nm(vid) || 'POI'}</span><button onclick="this.closest('#gl-p').remove()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">×</button></div><div style="padding:10px;"><input id="gl-i" type="text" value="${query}" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;" /><div id="gl-r"><div style="color:#666;">Searching...</div></div></div>`;
+        p.style.cssText = 'position:fixed;top:80px;right:20px;width:400px;max-height:520px;background:#fff;border:1px solid #ccc;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:10000;font:13px/1.4 Arial;overflow:hidden;';
+        p.innerHTML = `<div style="background:#4285f4;color:#fff;padding:8px 12px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;"><span>🔍 Google Link</span><button onclick="this.closest('#gl-p').remove()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">×</button></div><div style="padding:10px;"><div style="font-weight:bold;margin-bottom:6px;">${nm(vid) || 'POI'}</div><input id="gl-i" type="text" value="${query}" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;" /><div id="gl-r"><div style="color:#666;">Searching...</div></div><div id="gl-hint" style="margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;font-size:12px;color:#555;display:none;"></div></div>`;
         document.body.appendChild(p);
 
         // Search
@@ -136,7 +136,19 @@
                 d.onclick = () => {
                     navigator.clipboard.writeText(p.place_id);
                     d.style.background = '#e6f4ea';
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Place ID copied!</small>';
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Place ID скопирован!</small>';
+                    // Show instructions
+                    const hint = document.getElementById('gl-hint');
+                    if (hint) {
+                        hint.style.display = 'block';
+                        hint.innerHTML = `<b>➡️ Следующий шаг:</b><br>
+                            1. Найди «<b>+ Прив'язати до Google</b>» в панели POI (секция «Зовнішні сервіси»)<br>
+                            2. Нажми на неё → откроется поле поиска<br>
+                            3. Вставь Place ID: <code style="background:#e8e8e8;padding:1px 4px;border-radius:2px;">${p.place_id}</code><br>
+                            4. Нажми Enter → выбери результат<br><br>
+                            <button onclick="navigator.clipboard.writeText('${p.place_id}')" style="padding:4px 10px;background:#34a853;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:12px;">📋 Копировать Place ID ещё раз</button>
+                            <a href="https://www.google.com/maps/place/?q=place_id:${p.place_id}" target="_blank" style="margin-left:6px;color:#4285f4;font-size:12px;">🗺 Проверить в Google Maps</a>`;
+                    }
                 };
                 r.appendChild(d);
             }

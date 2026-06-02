@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.0
+// @version             1.7.1
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -101,67 +101,86 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
 
-    // Find "+ Прив'язати до Google" button
+    // Find "+ Прив'язати до Google" button — in "Зовнішні сервіси" section
     function findLinkBtn() {
         const panel = document.querySelector('#edit-panel') || document.body;
-        // XPath: find element containing exact text
-        const xp = document.evaluate(
-            '//a[contains(text(),"Прив") or contains(text(),"прив")] | //button[contains(text(),"Прив") or contains(text(),"прив")] | //span[contains(text(),"Прив") or contains(text(),"прив")]',
-            panel, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null
-        );
-        for (let i = 0; i < xp.snapshotLength; i++) {
-            const el = xp.snapshotItem(i);
-            const t = (el.textContent || '').trim();
-            if (t.length < 60) { console.log(L, 'XPath found:', t); return el; }
+
+        // Find "Зовнішні сервіси" section first
+        const sections = panel.querySelectorAll('div, section, fieldset');
+        let googleSection = null;
+        for (const sec of sections) {
+            const t = (sec.textContent || '').toLowerCase();
+            if (t.includes('зовнішні') && t.includes('сервіс') && t.length < 800) {
+                googleSection = sec;
+                break;
+            }
         }
-        // Fallback: walk all elements
-        const all = panel.querySelectorAll('a, button, span, div, label');
-        for (const el of all) {
+        if (!googleSection) { console.log(L, 'Section not found for button'); return null; }
+
+        // Find clickable element with "прив" text within this section
+        const els = googleSection.querySelectorAll('a, button, span, div, label');
+        for (const el of els) {
             const t = (el.textContent || '').trim();
             if (t.length > 60) continue;
             if (t.match(/^\+?\s*прив/i) && t.toLowerCase().includes('google')) {
-                console.log(L, 'Walk found:', t); return el;
+                console.log(L, 'Button found:', t, el.tagName); return el;
             }
         }
-        // Last: search by innerText
-        const all2 = document.querySelectorAll('*');
-        for (const el of all2) {
-            if (el.children.length > 2) continue;
-            const own = Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join(' ');
-            if (own.length < 60 && own.match(/^\+?\s*прив/i)) {
-                console.log(L, 'Direct text found:', own, el.tagName); return el;
+
+        // XPath within section
+        const xp = document.evaluate(
+            './/a[contains(text(),"Прив")] | .//button[contains(text(),"Прив")] | .//span[contains(text(),"Прив")]',
+            googleSection, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null
+        );
+        for (let i = 0; i < xp.snapshotLength; i++) {
+            const el = xp.snapshotItem(i);
+            if ((el.textContent || '').trim().length < 60) {
+                console.log(L, 'XPath button:', el.textContent?.trim()); return el;
             }
         }
+
         return null;
     }
 
-    // Find Google autocomplete input (check shadow DOM)
+    // Find Google autocomplete input — ONLY in "Зовнішні сервіси" section
     function findInput() {
-        // Standard
-        let inp = document.querySelector('.pac-target-input');
-        if (inp) return inp;
-        // Edit panel inputs
         const panel = document.querySelector('#edit-panel') || document.body;
-        const inputs = panel.querySelectorAll('input[type="text"], input:not([type])');
-        for (const i of inputs) {
-            if (i.offsetParent !== null && !i.value && i.offsetWidth > 50) return i;
-        }
-        // Shadow DOM
-        const allEls = document.querySelectorAll('*');
-        for (const el of allEls) {
-            if (el.shadowRoot) {
-                const si = el.shadowRoot.querySelector('input[type="text"], input:not([type])');
-                if (si && si.offsetParent !== null) return si;
+
+        // Find "Зовнішні сервіси" section
+        const sections = panel.querySelectorAll('div, section, fieldset');
+        let googleSection = null;
+        for (const sec of sections) {
+            const t = (sec.textContent || '').toLowerCase();
+            if (t.includes('зовнішні') && t.includes('сервіс') && t.length < 800) {
+                googleSection = sec;
+                break;
             }
         }
-        // Check iframes
-        const iframes = document.querySelectorAll('iframe');
-        for (const f of iframes) {
-            try {
-                const fi = f.contentDocument?.querySelector('input[type="text"], input:not([type])');
-                if (fi) return fi;
-            } catch (_) {}
+        if (!googleSection) { console.log(L, 'Зовнішні сервіси section not found'); return null; }
+        console.log(L, 'Found Зовнішні сервіси section');
+
+        // Look for input ONLY within this section
+        const inputs = googleSection.querySelectorAll('input');
+        for (const i of inputs) {
+            const vis = i.offsetParent !== null || i.offsetWidth > 0;
+            console.log(L, '  Input in section:', i.type, 'visible:', vis, 'value:', i.value?.substring(0, 20));
+            if (vis && i.type !== 'checkbox' && i.type !== 'hidden') return i;
         }
+
+        // Check shadow DOM within this section
+        const els = googleSection.querySelectorAll('*');
+        for (const el of els) {
+            if (el.shadowRoot) {
+                const si = el.shadowRoot.querySelector('input:not([type="checkbox"]):not([type="hidden"])');
+                if (si) { console.log(L, 'Found shadow input'); return si; }
+            }
+        }
+
+        // Also check for pac-target-input globally (Google autocomplete attaches to last focused input)
+        const pac = document.querySelector('.pac-target-input');
+        if (pac) { console.log(L, 'Found pac-target-input'); return pac; }
+
+        console.log(L, 'No input found in Зовнішні сервіси');
         return null;
     }
 

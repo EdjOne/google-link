@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.4
+// @version             1.7.5
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -206,15 +206,30 @@
         setTimeout(() => {
             const input = findInput();
             if (input) {
-                console.log(L, 'Input found:', input.tagName);
+                console.log(L, 'Input found:', input.tagName, 'filling char-by-char...');
                 d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю...</small>';
                 input.focus();
-                input.value = addr;
+                input.click();
+                // Clear first
+                input.value = '';
                 input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                console.log(L, 'Filled, waiting for pac-container...');
-                // Wait for autocomplete dropdown
-                waitForPac(d, addr, 0);
+                // Type char by char to trigger Google autocomplete
+                let i = 0;
+                const typeChar = () => {
+                    if (i < addr.length) {
+                        input.value += addr[i];
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new KeyboardEvent('keydown', { key: addr[i], bubbles: true }));
+                        input.dispatchEvent(new KeyboardEvent('keyup', { key: addr[i], bubbles: true }));
+                        i++;
+                        setTimeout(typeChar, 30);
+                    } else {
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        console.log(L, 'Filled, waiting for pac-container...');
+                        waitForPac(d, addr, 0);
+                    }
+                };
+                typeChar();
             } else {
                 waitAndFill(addr, d, attempt + 1);
             }

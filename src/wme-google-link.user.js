@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.2.2
+// @version             1.2.3
 // @description         Auto-search and link Google POI by venue address in WME
 // @description:uk      Автопошук та прив'язка Google POI за адресою POI у WME
 // @author              EdjOne
@@ -104,7 +104,7 @@
     // ──────────────────────────────────────────────
     function waitForGoogle() {
         const check = () => {
-            const g = uw.google?.maps?.places;
+            const g = uw.google?.maps?.places || window.google?.maps?.places;
             if (g?.AutocompleteService && g?.PlacesService) {
                 autocompleteService = new g.AutocompleteService();
                 placesService = new g.PlacesService(document.createElement('div'));
@@ -131,18 +131,18 @@
             const address = sdk.DataModel.Venues.getAddress({ venueId });
             const parts = [];
 
-            // Street name (try English if available for better Google results)
-            if (address.street?.englishName) {
-                parts.push(address.street.englishName);
-            } else if (address.street?.name) {
-                parts.push(address.street.name);
+            // Street name — prefer englishName for Google, fallback to name
+            let streetStr = address.street?.englishName || address.street?.name || '';
+            if (streetStr) {
+                parts.push(streetStr);
             }
 
             // House number
             if (address.houseNumber) parts.push(address.houseNumber);
 
-            // City — critical for Google search
-            if (address.city?.name) parts.push(address.city.name);
+            // City — critical for Google search (prefer englishName)
+            const cityStr = address.city?.englishName || address.city?.name || '';
+            if (cityStr) parts.push(cityStr);
 
             // State/region
             if (address.state?.name) parts.push(address.state.name);
@@ -150,7 +150,9 @@
             // Country
             if (address.country?.name) parts.push(address.country.name);
 
-            return parts.join(', ');
+            const query = parts.join(', ');
+            console.log(LOG_PREFIX, 'Query built:', query, '| street.en:', address.street?.englishName, '| city.en:', address.city?.englishName);
+            return query;
         } catch (e) {
             console.warn(LOG_PREFIX, 'buildSearchQuery failed:', e);
             return null;
@@ -179,13 +181,15 @@
         return new Promise((resolve) => {
             if (!autocompleteService) { resolve([]); return; }
 
-            const request = { input: query, types: ['establishment'] };
+            const request = { input: query };
             if (location) {
-                request.location = new google.maps.LatLng(location.lat, location.lng);
+                const L = uw.google?.maps?.LatLng || window.google?.maps?.LatLng;
+                if (L) request.location = new L(location.lat, location.lng);
                 request.radius = 5000;
             }
 
             autocompleteService.getPlacePredictions(request, (predictions, status) => {
+                console.log(LOG_PREFIX, 'Google search status:', status, 'results:', predictions?.length || 0);
                 if (status !== 'OK' || !predictions) { resolve([]); return; }
                 resolve(predictions);
             });

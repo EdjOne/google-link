@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.4.0
+// @version             1.4.1
 // @description         Search Google Places by venue address + copy Place ID
 // @description:uk      Пошук Google Places за адресою + копіювання Place ID
 // @author              EdjOne
@@ -16,6 +16,8 @@
 
 (function () {
     'use strict';
+
+    console.log('[GL] Script loaded! v1.4.1');
 
     const LOG_PREFIX = '[GL]';
     const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;

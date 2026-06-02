@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.2
+// @version             1.7.3
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -151,45 +151,48 @@
         return null;
     }
 
-    // Find Google autocomplete input — ONLY in "Зовнішні сервіси" section
+    // Find Google autocomplete input — GLOBAL search after button click
     function findInput() {
-        const panel = document.querySelector('#edit-panel') || document.body;
+        // 1. Google pac-target-input (created globally as overlay)
+        let inp = document.querySelector('.pac-target-input');
+        if (inp) { console.log(L, 'Found: .pac-target-input'); return inp; }
 
-        // Find "Зовнішні сервіси" section
-        const sections = panel.querySelectorAll('div, section, fieldset');
-        let googleSection = null;
-        for (const sec of sections) {
-            const t = (sec.textContent || '').toLowerCase();
-            if (t.includes('зовнішні') && t.includes('сервіс') && t.length < 800) {
-                googleSection = sec;
-                break;
+        // 2. Any visible text input that appeared recently (exclude our panel)
+        const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+        for (const i of allInputs) {
+            const vis = (i.offsetParent !== null || i.offsetWidth > 0);
+            const inOurPanel = i.closest('#gl-p');
+            const ph = (i.placeholder || '').toLowerCase();
+            console.log(L, '  Input:', i.type, 'vis:', vis, 'ph:', ph.substring(0, 30), 'our:', !!inOurPanel);
+            if (vis && !inOurPanel) return i;
+        }
+
+        // 3. Shadow DOM - search ALL elements with shadowRoot
+        const allEls = document.querySelectorAll('*');
+        for (const el of allEls) {
+            if (!el.shadowRoot) continue;
+            const si = el.shadowRoot.querySelector('input:not([type="checkbox"]):not([type="hidden"])');
+            if (si) { console.log(L, 'Found: shadow input in', el.tagName); return si; }
+            // Also check nested shadow roots
+            const inner = el.shadowRoot.querySelectorAll('*');
+            for (const inn of inner) {
+                if (inn.shadowRoot) {
+                    const sii = inn.shadowRoot.querySelector('input');
+                    if (sii) { console.log(L, 'Found: nested shadow input'); return sii; }
+                }
             }
         }
-        if (!googleSection) { console.log(L, 'Зовнішні сервіси section not found'); return null; }
-        console.log(L, 'Found Зовнішні сервіси section');
 
-        // Look for input ONLY within this section
-        const inputs = googleSection.querySelectorAll('input');
-        for (const i of inputs) {
-            const vis = i.offsetParent !== null || i.offsetWidth > 0;
-            console.log(L, '  Input in section:', i.type, 'visible:', vis, 'value:', i.value?.substring(0, 20));
-            if (vis && i.type !== 'checkbox' && i.type !== 'hidden') return i;
+        // 4. Check iframes
+        const iframes = document.querySelectorAll('iframe');
+        for (const f of iframes) {
+            try {
+                const fi = f.contentDocument?.querySelector('input');
+                if (fi && fi.offsetWidth > 30) { console.log(L, 'Found: iframe input'); return fi; }
+            } catch (_) {}
         }
 
-        // Check shadow DOM within this section
-        const els = googleSection.querySelectorAll('*');
-        for (const el of els) {
-            if (el.shadowRoot) {
-                const si = el.shadowRoot.querySelector('input:not([type="checkbox"]):not([type="hidden"])');
-                if (si) { console.log(L, 'Found shadow input'); return si; }
-            }
-        }
-
-        // Also check for pac-target-input globally (Google autocomplete attaches to last focused input)
-        const pac = document.querySelector('.pac-target-input');
-        if (pac) { console.log(L, 'Found pac-target-input'); return pac; }
-
-        console.log(L, 'No input found in Зовнішні сервіси');
+        console.log(L, 'No input found anywhere');
         return null;
     }
 

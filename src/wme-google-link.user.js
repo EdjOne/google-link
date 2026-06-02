@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.2.0
+// @version             1.2.1
 // @description         Auto-search and link Google POI by venue address in WME
 // @description:uk      Автопошук та прив'язка Google POI за адресою POI у WME
 // @author              EdjOne

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.3.0
+// @version             1.3.1
 // @description         Auto-fill native WME Google linking by venue address
 // @description:uk      Автозаповнення нативного прив'язування Google за адресою POI
 // @author              EdjOne
@@ -109,24 +109,56 @@
     //  Find the "+ Прив'язати до Google" link
     // ──────────────────────────────────────────────
     function findGoogleLinkButton() {
-        // Search all links and buttons in the edit panel
         const panel = document.querySelector('#edit-panel') || document.body;
+
+        // 1. Exact match: "+ Прив'язати до Google" — short text only
         const allEls = panel.querySelectorAll('a, button, span, div, label');
-
         for (const el of allEls) {
-            const text = (el.textContent || '').trim().toLowerCase();
-            if (text.includes('прив') && text.includes('google')) return el;
-            if (text.includes('link') && text.includes('google')) return el;
-            if (text.includes('прив\'язати')) return el;
+            const text = (el.textContent || '').trim();
+            // Must be short (< 80 chars) to avoid matching the whole panel
+            if (text.length > 80) continue;
+            const low = text.toLowerCase();
+            if ((low.includes('прив') || low.includes('прив\'язати')) && low.includes('google')) {
+                console.log(LOG_PREFIX, 'Found button by exact match:', text);
+                return el;
+            }
+            if (low === '+ прив\'язати до google' || low === 'прив\'язати до google') {
+                console.log(LOG_PREFIX, 'Found button by exact text:', text);
+                return el;
+            }
         }
 
-        // Fallback: search entire document
-        const all = document.querySelectorAll('a, button');
-        for (const el of all) {
-            const text = (el.textContent || '').trim().toLowerCase();
-            if (text.includes('прив') && text.includes('google')) return el;
+        // 2. Look for "+" links near "Google" text in Зовнішні сервіси section
+        const sections = panel.querySelectorAll('.form-group, section, fieldset');
+        for (const sec of sections) {
+            const secText = (sec.textContent || '').toLowerCase();
+            if (!secText.includes('зовнішні') && !secText.includes('сервіс') && !secText.includes('external')) continue;
+            if (!secText.includes('google')) continue;
+
+            // Found the "Зовнішні сервіси" section — find clickable element
+            const links = sec.querySelectorAll('a, button, [role="button"], span[class*="link"], span[class*="btn"]');
+            for (const link of links) {
+                const t = (link.textContent || '').trim().toLowerCase();
+                if (t.includes('прив') || t.includes('google')) {
+                    if (t.length < 80) {
+                        console.log(LOG_PREFIX, 'Found button in Зовнішні сервіси:', t);
+                        return link;
+                    }
+                }
+            }
         }
 
+        // 3. Last resort: search for element with "+" text near Google
+        const plusEls = panel.querySelectorAll('a, button, span');
+        for (const el of plusEls) {
+            const t = (el.textContent || '').trim();
+            if (t.length < 50 && t.startsWith('+') && t.toLowerCase().includes('google')) {
+                console.log(LOG_PREFIX, 'Found button by "+" prefix:', t);
+                return el;
+            }
+        }
+
+        console.log(LOG_PREFIX, 'Google link button NOT found');
         return null;
     }
 

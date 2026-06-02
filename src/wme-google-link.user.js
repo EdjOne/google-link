@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.3.1
+// @version             1.3.2
 // @description         Auto-fill native WME Google linking by venue address
 // @description:uk      Автозаповнення нативного прив'язування Google за адресою POI
 // @author              EdjOne
@@ -111,50 +111,58 @@
     function findGoogleLinkButton() {
         const panel = document.querySelector('#edit-panel') || document.body;
 
-        // 1. Exact match: "+ Прив'язати до Google" — short text only
-        const allEls = panel.querySelectorAll('a, button, span, div, label');
+        // Strategy 1: Find elements whose ONLY text is about "Прив'язати до Google"
+        const allEls = panel.querySelectorAll('a, button, span, div, label, wz-button');
         for (const el of allEls) {
-            const text = (el.textContent || '').trim();
-            // Must be short (< 80 chars) to avoid matching the whole panel
-            if (text.length > 80) continue;
-            const low = text.toLowerCase();
-            if ((low.includes('прив') || low.includes('прив\'язати')) && low.includes('google')) {
-                console.log(LOG_PREFIX, 'Found button by exact match:', text);
-                return el;
-            }
-            if (low === '+ прив\'язати до google' || low === 'прив\'язати до google') {
-                console.log(LOG_PREFIX, 'Found button by exact text:', text);
-                return el;
-            }
-        }
+            // Only check leaf-ish elements (no deep children with lots of text)
+            const directText = Array.from(el.childNodes)
+                .filter(n => n.nodeType === 3)
+                .map(n => n.textContent.trim())
+                .join(' ');
+            const fullText = (el.textContent || '').trim();
 
-        // 2. Look for "+" links near "Google" text in Зовнішні сервіси section
-        const sections = panel.querySelectorAll('.form-group, section, fieldset');
-        for (const sec of sections) {
-            const secText = (sec.textContent || '').toLowerCase();
-            if (!secText.includes('зовнішні') && !secText.includes('сервіс') && !secText.includes('external')) continue;
-            if (!secText.includes('google')) continue;
+            // Skip containers with lots of text
+            if (fullText.length > 100) continue;
 
-            // Found the "Зовнішні сервіси" section — find clickable element
-            const links = sec.querySelectorAll('a, button, [role="button"], span[class*="link"], span[class*="btn"]');
-            for (const link of links) {
-                const t = (link.textContent || '').trim().toLowerCase();
-                if (t.includes('прив') || t.includes('google')) {
-                    if (t.length < 80) {
-                        console.log(LOG_PREFIX, 'Found button in Зовнішні сервіси:', t);
-                        return link;
-                    }
+            // Match: text IS "Прив'язати до Google" or "+ Прив'язати до Google"
+            const candidates = [directText, fullText];
+            for (const t of candidates) {
+                const low = t.toLowerCase().replace(/\s+/g, ' ').trim();
+                if (low === '+ прив\'язати до google' ||
+                    low === 'прив\'язати до google' ||
+                    low === '+ прив\'язати до google' ||
+                    low.match(/^\+\s*прив/i)) {
+                    console.log(LOG_PREFIX, 'Found exact button:', t);
+                    return el;
                 }
             }
         }
 
-        // 3. Last resort: search for element with "+" text near Google
-        const plusEls = panel.querySelectorAll('a, button, span');
-        for (const el of plusEls) {
-            const t = (el.textContent || '').trim();
-            if (t.length < 50 && t.startsWith('+') && t.toLowerCase().includes('google')) {
-                console.log(LOG_PREFIX, 'Found button by "+" prefix:', t);
-                return el;
+        // Strategy 2: Find the section "Зовнішні сервіси" and get the LAST clickable child
+        const allDivs = panel.querySelectorAll('div, section, fieldset, .form-group');
+        for (const div of allDivs) {
+            const t = (div.textContent || '').toLowerCase();
+            if (!t.includes('зовнішні') || !t.includes('google')) continue;
+            if (t.length > 500) continue; // Too big = container
+
+            // This might be the section itself — find clickable child
+            const clickables = div.querySelectorAll('a, button, [role="button"], span[style*="cursor"], span[onclick]');
+            for (const c of clickables) {
+                const ct = (c.textContent || '').trim().toLowerCase();
+                if (ct.includes('прив') && ct.length < 60) {
+                    console.log(LOG_PREFIX, 'Found button in section:', ct);
+                    return c;
+                }
+            }
+        }
+
+        // Strategy 3: Last resort — find by URL/link with google
+        const links = panel.querySelectorAll('a[href*="google"], a[href*="place"]');
+        for (const link of links) {
+            const t = (link.textContent || '').trim();
+            if (t.length < 60 && (t.includes('Прив') || t.includes('прив'))) {
+                console.log(LOG_PREFIX, 'Found link:', t);
+                return link;
             }
         }
 
@@ -166,23 +174,47 @@
     //  Find the Google autocomplete input (appears after clicking link)
     // ──────────────────────────────────────────────
     function findGoogleAutocompleteInput() {
-        // Google Places autocomplete uses class "pac-target-input"
+        // 1. Standard Google Places autocomplete
         let input = document.querySelector('.pac-target-input');
-        if (input) return input;
+        if (input) { console.log(LOG_PREFIX, 'Found: pac-target-input'); return input; }
 
-        // Or look for input with google-related attributes
+        // 2. Google-related attributes
         input = document.querySelector('input[data-google], input[placeholder*="Google"], input[placeholder*="place"]');
-        if (input) return input;
+        if (input) { console.log(LOG_PREFIX, 'Found: google attribute'); return input; }
 
-        // Look for any new input in the edit panel that appeared recently
+        // 3. Modal/dialog inputs (WME may use a popup)
+        const modals = document.querySelectorAll('.modal, .dialog, [role="dialog"], wz-modal, .overlay, .popup');
+        for (const m of modals) {
+            const inp = m.querySelector('input[type="text"], input:not([type]), wz-input-text');
+            if (inp) { console.log(LOG_PREFIX, 'Found: modal input'); return inp; }
+        }
+
+        // 4. Any new input in the edit panel with search-like placeholder
         const panel = document.querySelector('#edit-panel') || document.body;
         const inputs = panel.querySelectorAll('input[type="text"], input:not([type])');
         for (const inp of inputs) {
             const ph = (inp.placeholder || '').toLowerCase();
-            if (ph.includes('google') || ph.includes('search') || ph.includes('place') || ph.includes('address')) {
+            if (ph.includes('google') || ph.includes('search') || ph.includes('place') || ph.includes('address') || ph.includes('пошук') || ph.includes('адрес')) {
+                console.log(LOG_PREFIX, 'Found: placeholder match:', ph);
                 return inp;
             }
         }
+
+        // 5. Any input that appeared recently (check if it's visible and empty)
+        for (const inp of inputs) {
+            if (inp.offsetParent !== null && !inp.value && inp.offsetWidth > 50) {
+                console.log(LOG_PREFIX, 'Found: visible empty input');
+                return inp;
+            }
+        }
+
+        // 6. Log all inputs for debugging
+        const allInputs = document.querySelectorAll('input');
+        console.log(LOG_PREFIX, 'All inputs on page:', allInputs.length);
+        allInputs.forEach((inp, i) => {
+            const vis = inp.offsetParent !== null;
+            console.log(LOG_PREFIX, `  input[${i}]: type=${inp.type} placeholder="${inp.placeholder}" visible=${vis} value="${inp.value?.substring(0,30)}"`);
+        });
 
         return null;
     }

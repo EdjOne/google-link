@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.6.1
+// @version             1.6.2
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -134,20 +134,22 @@
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
                 d.onclick = () => {
-                    navigator.clipboard.writeText(p.place_id);
+                    // Copy the ADDRESS (not Place ID) - WME search needs a query
+                    const copyText = (p.structured_formatting?.main_text || '') + ' ' + (p.structured_formatting?.secondary_text || p.description || '');
+                    navigator.clipboard.writeText(copyText.trim());
                     d.style.background = '#e6f4ea';
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Place ID скопирован!</small>';
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Адрес скопирован!</small>';
                     // Show instructions
                     const hint = document.getElementById('gl-hint');
                     if (hint) {
                         hint.style.display = 'block';
                         hint.innerHTML = `<b>➡️ Следующий шаг:</b><br>
-                            1. Найди «<b>+ Прив'язати до Google</b>» в панели POI (секция «Зовнішні сервіси»)<br>
-                            2. Нажми на неё → откроется поле поиска<br>
-                            3. Вставь Place ID: <code style="background:#e8e8e8;padding:1px 4px;border-radius:2px;">${p.place_id}</code><br>
-                            4. Нажми Enter → выбери результат<br><br>
-                            <button onclick="navigator.clipboard.writeText('${p.place_id}')" style="padding:4px 10px;background:#34a853;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:12px;">📋 Копировать Place ID ещё раз</button>
-                            <a href="https://www.google.com/maps/place/?q=place_id:${p.place_id}" target="_blank" style="margin-left:6px;color:#4285f4;font-size:12px;">🗺 Проверить в Google Maps</a>`;
+                            1. Найди «<b>+ Прив'язати до Google</b>» в секции «Зовнішні сервіси»<br>
+                            2. Нажми → откроется поле поиска<br>
+                            3. Вставь адрес: <code style="background:#e8e8e8;padding:1px 4px;border-radius:2px;font-size:11px;">${copyText.trim()}</code><br>
+                            4. Выбери правильный результат из списка<br><br>
+                            <button onclick="navigator.clipboard.writeText('${copyText.trim().replace(/'/g, "\\'")}')" style="padding:4px 10px;background:#34a853;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:12px;">📋 Копировать адрес ещё раз</button>
+                            <a href="https://www.google.com/maps/place/?q=place_id:${p.place_id}" target="_blank" style="margin-left:6px;color:#4285f4;font-size:12px;">🗺 Проверить</a>`;
                     }
                 };
                 r.appendChild(d);

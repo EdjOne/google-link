@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.3.2
+// @version             1.3.3
 // @description         Auto-fill native WME Google linking by venue address
 // @description:uk      Автозаповнення нативного прив'язування Google за адресою POI
 // @author              EdjOne
@@ -111,58 +111,64 @@
     function findGoogleLinkButton() {
         const panel = document.querySelector('#edit-panel') || document.body;
 
-        // Strategy 1: Find elements whose ONLY text is about "Прив'язати до Google"
-        const allEls = panel.querySelectorAll('a, button, span, div, label, wz-button');
-        for (const el of allEls) {
-            // Only check leaf-ish elements (no deep children with lots of text)
-            const directText = Array.from(el.childNodes)
+        // Strategy 1: Find EXACT leaf element with "+ Прив'язати до Google"
+        // Walk ALL elements, check ONLY direct text (not children's text)
+        const walker = document.createTreeWalker(panel, NodeFilter.SHOW_ELEMENT);
+        let node;
+        while (node = walker.nextNode()) {
+            // Get only direct text nodes of this element
+            const directText = Array.from(node.childNodes)
                 .filter(n => n.nodeType === 3)
                 .map(n => n.textContent.trim())
-                .join(' ');
-            const fullText = (el.textContent || '').trim();
+                .join(' ')
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .trim();
 
-            // Skip containers with lots of text
-            if (fullText.length > 100) continue;
-
-            // Match: text IS "Прив'язати до Google" or "+ Прив'язати до Google"
-            const candidates = [directText, fullText];
-            for (const t of candidates) {
-                const low = t.toLowerCase().replace(/\s+/g, ' ').trim();
-                if (low === '+ прив\'язати до google' ||
-                    low === 'прив\'язати до google' ||
-                    low === '+ прив\'язати до google' ||
-                    low.match(/^\+\s*прив/i)) {
-                    console.log(LOG_PREFIX, 'Found exact button:', t);
-                    return el;
-                }
+            if (directText.match(/^\+?\s*прив/i) && directText.includes('google') && directText.length < 60) {
+                console.log(LOG_PREFIX, 'Found leaf button:', directText, '| tag:', node.tagName, '| class:', node.className);
+                return node;
             }
         }
 
-        // Strategy 2: Find the section "Зовнішні сервіси" and get the LAST clickable child
-        const allDivs = panel.querySelectorAll('div, section, fieldset, .form-group');
+        // Strategy 2: Find the element that has "Прив'язати" as its own text
+        // (not inherited from children)
+        const allEls = panel.querySelectorAll('*');
+        for (const el of allEls) {
+            // Skip elements with many children (containers)
+            if (el.children.length > 3) continue;
+
+            const text = (el.textContent || '').trim().toLowerCase().replace(/\s+/g, ' ');
+            if (text.length > 60) continue;
+
+            if (text.match(/^\+?\s*прив.*google/) || text.match(/^прив.*google/)) {
+                console.log(LOG_PREFIX, 'Found by text match:', text, '| tag:', el.tagName, '| class:', el.className);
+                return el;
+            }
+        }
+
+        // Strategy 3: Click-based approach - find all clickable things near "Google"
+        const clickables = panel.querySelectorAll('a, button, [role="button"], [onclick], [tabindex]');
+        for (const el of clickables) {
+            const t = (el.textContent || '').trim();
+            if (t.length < 50 && t.toLowerCase().includes('прив')) {
+                console.log(LOG_PREFIX, 'Found clickable:', t, '| tag:', el.tagName);
+                return el;
+            }
+        }
+
+        // Strategy 4: Debug — dump the Зовнішні сервіси section HTML
+        const allDivs = panel.querySelectorAll('div, section');
         for (const div of allDivs) {
             const t = (div.textContent || '').toLowerCase();
-            if (!t.includes('зовнішні') || !t.includes('google')) continue;
-            if (t.length > 500) continue; // Too big = container
-
-            // This might be the section itself — find clickable child
-            const clickables = div.querySelectorAll('a, button, [role="button"], span[style*="cursor"], span[onclick]');
-            for (const c of clickables) {
-                const ct = (c.textContent || '').trim().toLowerCase();
-                if (ct.includes('прив') && ct.length < 60) {
-                    console.log(LOG_PREFIX, 'Found button in section:', ct);
-                    return c;
+            if (t.includes('зовнішні') && t.includes('google') && t.length < 500) {
+                console.log(LOG_PREFIX, 'Section HTML:', div.innerHTML.substring(0, 500));
+                // Find the LAST child that mentions Google
+                const last = div.querySelector('a:last-child, button:last-child, span:last-child');
+                if (last) {
+                    console.log(LOG_PREFIX, 'Last child:', last.textContent?.trim(), '| tag:', last.tagName);
+                    return last;
                 }
-            }
-        }
-
-        // Strategy 3: Last resort — find by URL/link with google
-        const links = panel.querySelectorAll('a[href*="google"], a[href*="place"]');
-        for (const link of links) {
-            const t = (link.textContent || '').trim();
-            if (t.length < 60 && (t.includes('Прив') || t.includes('прив'))) {
-                console.log(LOG_PREFIX, 'Found link:', t);
-                return link;
             }
         }
 

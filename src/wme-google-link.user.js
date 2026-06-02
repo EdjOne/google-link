@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.6.2
+// @version             1.7.0
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -101,6 +101,70 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
 
+    // Find "+ Прив'язати до Google" button
+    function findLinkBtn() {
+        const panel = document.querySelector('#edit-panel') || document.body;
+        // XPath: find element containing exact text
+        const xp = document.evaluate(
+            '//a[contains(text(),"Прив") or contains(text(),"прив")] | //button[contains(text(),"Прив") or contains(text(),"прив")] | //span[contains(text(),"Прив") or contains(text(),"прив")]',
+            panel, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null
+        );
+        for (let i = 0; i < xp.snapshotLength; i++) {
+            const el = xp.snapshotItem(i);
+            const t = (el.textContent || '').trim();
+            if (t.length < 60) { console.log(L, 'XPath found:', t); return el; }
+        }
+        // Fallback: walk all elements
+        const all = panel.querySelectorAll('a, button, span, div, label');
+        for (const el of all) {
+            const t = (el.textContent || '').trim();
+            if (t.length > 60) continue;
+            if (t.match(/^\+?\s*прив/i) && t.toLowerCase().includes('google')) {
+                console.log(L, 'Walk found:', t); return el;
+            }
+        }
+        // Last: search by innerText
+        const all2 = document.querySelectorAll('*');
+        for (const el of all2) {
+            if (el.children.length > 2) continue;
+            const own = Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join(' ');
+            if (own.length < 60 && own.match(/^\+?\s*прив/i)) {
+                console.log(L, 'Direct text found:', own, el.tagName); return el;
+            }
+        }
+        return null;
+    }
+
+    // Find Google autocomplete input (check shadow DOM)
+    function findInput() {
+        // Standard
+        let inp = document.querySelector('.pac-target-input');
+        if (inp) return inp;
+        // Edit panel inputs
+        const panel = document.querySelector('#edit-panel') || document.body;
+        const inputs = panel.querySelectorAll('input[type="text"], input:not([type])');
+        for (const i of inputs) {
+            if (i.offsetParent !== null && !i.value && i.offsetWidth > 50) return i;
+        }
+        // Shadow DOM
+        const allEls = document.querySelectorAll('*');
+        for (const el of allEls) {
+            if (el.shadowRoot) {
+                const si = el.shadowRoot.querySelector('input[type="text"], input:not([type])');
+                if (si && si.offsetParent !== null) return si;
+            }
+        }
+        // Check iframes
+        const iframes = document.querySelectorAll('iframe');
+        for (const f of iframes) {
+            try {
+                const fi = f.contentDocument?.querySelector('input[type="text"], input:not([type])');
+                if (fi) return fi;
+            } catch (_) {}
+        }
+        return null;
+    }
+
     async function show(vid) {
         const old = document.getElementById('gl-p'); if (old) old.remove();
         const query = q(vid); if (!query) return;
@@ -133,23 +197,89 @@
                 d.innerHTML = `<b>${p.structured_formatting?.main_text || p.description}</b><br><small style="color:#888;">${p.structured_formatting?.secondary_text || ''}</small><br><small style="color:#aaa;word-break:break-all;">${p.place_id}</small>`;
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
-                d.onclick = () => {
-                    // Copy the ADDRESS (not Place ID) - WME search needs a query
-                    const copyText = (p.structured_formatting?.main_text || '') + ' ' + (p.structured_formatting?.secondary_text || p.description || '');
-                    navigator.clipboard.writeText(copyText.trim());
-                    d.style.background = '#e6f4ea';
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Адрес скопирован!</small>';
-                    // Show instructions
-                    const hint = document.getElementById('gl-hint');
-                    if (hint) {
-                        hint.style.display = 'block';
-                        hint.innerHTML = `<b>➡️ Следующий шаг:</b><br>
-                            1. Найди «<b>+ Прив'язати до Google</b>» в секции «Зовнішні сервіси»<br>
-                            2. Нажми → откроется поле поиска<br>
-                            3. Вставь адрес: <code style="background:#e8e8e8;padding:1px 4px;border-radius:2px;font-size:11px;">${copyText.trim()}</code><br>
-                            4. Выбери правильный результат из списка<br><br>
-                            <button onclick="navigator.clipboard.writeText('${copyText.trim().replace(/'/g, "\\'")}')" style="padding:4px 10px;background:#34a853;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:12px;">📋 Копировать адрес ещё раз</button>
-                            <a href="https://www.google.com/maps/place/?q=place_id:${p.place_id}" target="_blank" style="margin-left:6px;color:#4285f4;font-size:12px;">🗺 Проверить</a>`;
+                d.onclick = async () => {
+                    const addressText = (p.structured_formatting?.main_text || '') + ' ' + (p.structured_formatting?.secondary_text || p.description || '');
+                    const addr = addressText.trim();
+                    d.style.background = '#e8f0fe';
+                    d.innerHTML += '<br><small style="color:#4285f4;">⏳ Автоматическое заполнение...</small>';
+
+                    // Step 1: Find and click "+ Прив'язати до Google"
+                    const btn = findLinkBtn();
+                    if (!btn) {
+                        d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка «Прив\'язати до Google» не найдена. Вставь вручную.</small>';
+                        navigator.clipboard.writeText(addr);
+                        return;
+                    }
+                    console.log(L, 'Clicking button:', btn.textContent?.trim());
+                    btn.click();
+
+                    // Step 2: Wait for input to appear (check shadow DOM too)
+                    let input = null;
+                    for (let i = 0; i < 30; i++) {
+                        await new Promise(r => setTimeout(r, 300));
+                        input = findInput();
+                        if (input) break;
+                    }
+
+                    if (!input) {
+                        d.innerHTML += '<br><small style="color:#ea4335;">❌ Поле поиска не появилось. Вставь вручную.</small>';
+                        navigator.clipboard.writeText(addr);
+                        return;
+                    }
+
+                    console.log(L, 'Input found:', input.tagName, input.className);
+                    d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю поле...</small>';
+
+                    // Step 3: Fill input
+                    input.focus();
+                    input.value = '';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    for (let i = 0; i < addr.length; i++) {
+                        input.value += addr[i];
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        await new Promise(r => setTimeout(r, 20));
+                    }
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    console.log(L, 'Input filled, waiting for suggestions...');
+
+                    // Step 4: Wait for autocomplete dropdown
+                    let clicked = false;
+                    for (let i = 0; i < 20; i++) {
+                        await new Promise(r => setTimeout(r, 500));
+                        const pac = document.querySelector('.pac-container');
+                        if (pac && pac.style.display !== 'none') {
+                            const items = pac.querySelectorAll('.pac-item');
+                            if (items.length > 0) {
+                                console.log(L, 'Clicking first suggestion:', items[0].textContent);
+                                items[0].click();
+                                clicked = true;
+                                break;
+                            }
+                        }
+                        // Also check shadow DOMs
+                        const allEls = document.querySelectorAll('*');
+                        for (const el of allEls) {
+                            if (el.shadowRoot) {
+                                const pac = el.shadowRoot.querySelector('.pac-container');
+                                if (pac) {
+                                    const items = pac.querySelectorAll('.pac-item');
+                                    if (items.length > 0) {
+                                        items[0].click();
+                                        clicked = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (clicked) break;
+                    }
+
+                    if (clicked) {
+                        d.innerHTML += '<br><small style="color:#34a853;">✅ Готово! Google Place привязан!</small>';
+                    } else {
+                        d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Автовыбор не сработал. Выбери результат вручную в поле поиска.</small>';
+                        navigator.clipboard.writeText(addr);
                     }
                 };
                 r.appendChild(d);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.3
+// @version             1.7.4
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -196,6 +196,52 @@
         return null;
     }
 
+    // Async wait-and-fill (non-blocking, called from sync onclick)
+    function waitAndFill(addr, d, attempt) {
+        if (attempt > 30) {
+            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Input не появился. Вставь вручную.</small>';
+            navigator.clipboard.writeText(addr);
+            return;
+        }
+        setTimeout(() => {
+            const input = findInput();
+            if (input) {
+                console.log(L, 'Input found:', input.tagName);
+                d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю...</small>';
+                input.focus();
+                input.value = addr;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log(L, 'Filled, waiting for pac-container...');
+                // Wait for autocomplete dropdown
+                waitForPac(d, addr, 0);
+            } else {
+                waitAndFill(addr, d, attempt + 1);
+            }
+        }, 300);
+    }
+
+    function waitForPac(d, addr, attempt) {
+        if (attempt > 20) {
+            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Выбери результат вручную.</small>';
+            navigator.clipboard.writeText(addr);
+            return;
+        }
+        setTimeout(() => {
+            const pac = document.querySelector('.pac-container');
+            if (pac && pac.style.display !== 'none') {
+                const items = pac.querySelectorAll('.pac-item');
+                if (items.length > 0) {
+                    console.log(L, 'Clicking suggestion:', items[0].textContent);
+                    items[0].click();
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>';
+                    return;
+                }
+            }
+            waitForPac(d, addr, attempt + 1);
+        }, 500);
+    }
+
     async function show(vid) {
         const old = document.getElementById('gl-p'); if (old) old.remove();
         const query = q(vid); if (!query) return;
@@ -228,89 +274,28 @@
                 d.innerHTML = `<b>${p.structured_formatting?.main_text || p.description}</b><br><small style="color:#888;">${p.structured_formatting?.secondary_text || ''}</small><br><small style="color:#aaa;word-break:break-all;">${p.place_id}</small>`;
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
-                d.onclick = async () => {
-                    const addressText = (p.structured_formatting?.main_text || '') + ' ' + (p.structured_formatting?.secondary_text || p.description || '');
-                    const addr = addressText.trim();
-                    d.style.background = '#e8f0fe';
-                    d.innerHTML += '<br><small style="color:#4285f4;">⏳ Автоматическое заполнение...</small>';
+                d.onclick = () => {
+                    try {
+                        const addressText = (p.structured_formatting?.main_text || '') + ' ' + (p.structured_formatting?.secondary_text || p.description || '');
+                        const addr = addressText.trim();
+                        d.style.background = '#e8f0fe';
+                        d.innerHTML += '<br><small style="color:#4285f4;">⏳ Автопоиск...</small>';
 
-                    // Step 1: Find and click "+ Прив'язати до Google"
-                    const btn = findLinkBtn();
-                    if (!btn) {
-                        d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка «Прив\'язати до Google» не найдена. Вставь вручную.</small>';
-                        navigator.clipboard.writeText(addr);
-                        return;
-                    }
-                    console.log(L, 'Clicking button:', btn.textContent?.trim());
-                    btn.click();
-
-                    // Step 2: Wait for input to appear (check shadow DOM too)
-                    let input = null;
-                    for (let i = 0; i < 30; i++) {
-                        await new Promise(r => setTimeout(r, 300));
-                        input = findInput();
-                        if (input) break;
-                    }
-
-                    if (!input) {
-                        d.innerHTML += '<br><small style="color:#ea4335;">❌ Поле поиска не появилось. Вставь вручную.</small>';
-                        navigator.clipboard.writeText(addr);
-                        return;
-                    }
-
-                    console.log(L, 'Input found:', input.tagName, input.className);
-                    d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю поле...</small>';
-
-                    // Step 3: Fill input
-                    input.focus();
-                    input.value = '';
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    for (let i = 0; i < addr.length; i++) {
-                        input.value += addr[i];
-                        input.dispatchEvent(new Event('input', { bubbles: true }));
-                        await new Promise(r => setTimeout(r, 20));
-                    }
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-
-                    console.log(L, 'Input filled, waiting for suggestions...');
-
-                    // Step 4: Wait for autocomplete dropdown
-                    let clicked = false;
-                    for (let i = 0; i < 20; i++) {
-                        await new Promise(r => setTimeout(r, 500));
-                        const pac = document.querySelector('.pac-container');
-                        if (pac && pac.style.display !== 'none') {
-                            const items = pac.querySelectorAll('.pac-item');
-                            if (items.length > 0) {
-                                console.log(L, 'Clicking first suggestion:', items[0].textContent);
-                                items[0].click();
-                                clicked = true;
-                                break;
-                            }
+                        // Step 1: Find and click button
+                        const btn = findLinkBtn();
+                        if (!btn) {
+                            d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка не найдена. Вставь: ' + addr + '</small>';
+                            navigator.clipboard.writeText(addr);
+                            return;
                         }
-                        // Also check shadow DOMs
-                        const allEls = document.querySelectorAll('*');
-                        for (const el of allEls) {
-                            if (el.shadowRoot) {
-                                const pac = el.shadowRoot.querySelector('.pac-container');
-                                if (pac) {
-                                    const items = pac.querySelectorAll('.pac-item');
-                                    if (items.length > 0) {
-                                        items[0].click();
-                                        clicked = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (clicked) break;
-                    }
+                        console.log(L, 'Clicking:', btn.textContent?.trim());
+                        btn.click();
 
-                    if (clicked) {
-                        d.innerHTML += '<br><small style="color:#34a853;">✅ Готово! Google Place привязан!</small>';
-                    } else {
-                        d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Автовыбор не сработал. Выбери результат вручную в поле поиска.</small>';
-                        navigator.clipboard.writeText(addr);
+                        // Step 2: Wait for input (async wait, non-blocking)
+                        waitAndFill(addr, d, 0);
+                    } catch (e) {
+                        console.error(L, 'Click error:', e);
+                        d.innerHTML += '<br><small style="color:#ea4335;">❌ Ошибка: ' + e.message + '</small>';
                     }
                 };
                 r.appendChild(d);

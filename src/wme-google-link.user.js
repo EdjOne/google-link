@@ -343,66 +343,59 @@
     // ──────────────────────────────────────────────
     //  MONITOR SELECTION
     // ──────────────────────────────────────────────
+    let _lastVenueId = null;
+
+    function checkSelection() {
+        const vid = getSelectedVenueId();
+        if (vid && vid !== _lastVenueId) {
+            _lastVenueId = vid;
+            showPanel(vid);
+        } else if (!vid && _lastVenueId) {
+            _lastVenueId = null;
+            const p = document.getElementById('gl-panel');
+            if (p) p.style.display = 'none';
+            panelVisible = false;
+        }
+    }
+
     function wireEvents() {
-        // SDK events
-        sdk.Events.on({ eventName: 'wme-selection-changed', eventHandler: onSelection });
-        sdk.Events.on({ eventName: 'wme-feature-editor-opened', eventHandler: onSelection });
+        // SDK events (non-blocking, .then() only)
+        try {
+            sdk.Events.on({ eventName: 'wme-selection-changed', eventHandler: () => setTimeout(checkSelection, 150) });
+            sdk.Events.on({ eventName: 'wme-feature-editor-opened', eventHandler: () => setTimeout(checkSelection, 300) });
+        } catch (e) { console.warn(LOG_PREFIX, 'SDK events failed:', e); }
 
         // Legacy fallback
         try {
-            uw.W.selectionManager.events.register('selectionchanged', null, onSelection);
+            uw.W.selectionManager.events.register('selectionchanged', null, () => setTimeout(checkSelection, 150));
         } catch (_) {}
 
         // Polling safety net (every 1s)
-        setInterval(() => {
-            const vid = getSelectedVenueId();
-            if (vid && vid !== _lastVenueId) {
-                _lastVenueId = vid;
-                showPanel(vid);
-            } else if (!vid && _lastVenueId) {
-                _lastVenueId = null;
-                const p = document.getElementById('gl-panel');
-                if (p) p.style.display = 'none';
-                panelVisible = false;
-            }
-        }, 1000);
-    }
+        setInterval(checkSelection, 1000);
 
-    let _lastVenueId = null;
-
-    function onSelection() {
-        setTimeout(() => {
-            const vid = getSelectedVenueId();
-            if (vid) {
-                _lastVenueId = vid;
-                showPanel(vid);
-            } else {
-                _lastVenueId = null;
-                const p = document.getElementById('gl-panel');
-                if (p) p.style.display = 'none';
-                panelVisible = false;
-            }
-        }, 200);
+        console.log(LOG_PREFIX, 'Events wired, monitoring...');
     }
 
     // ──────────────────────────────────────────────
-    //  MAIN
+    //  MAIN — NO AWAIT on wme-ready!
     // ──────────────────────────────────────────────
     async function main() {
         console.log(LOG_PREFIX, 'Starting...');
 
         await waitForSdk();
-        await new Promise(r => setTimeout(r, 500));
+        console.log(LOG_PREFIX, 'WME globals ready');
 
         sdk = initSDK();
-        console.log(LOG_PREFIX, 'SDK ok');
+        console.log(LOG_PREFIX, 'SDK initialized');
 
-        await sdk.Events.once({ eventName: 'wme-ready' });
-        console.log(LOG_PREFIX, 'WME ready');
+        // Do NOT await wme-ready — it may have already fired!
+        // Just listen for it non-blocking (same as WME Place Helper)
+        sdk.Events.once({ eventName: 'wme-ready' }).then(() => {
+            console.log(LOG_PREFIX, 'wme-ready fired');
+        }).catch(() => {});
 
         waitForGoogle();
         wireEvents();
-        console.log(LOG_PREFIX, 'Monitoring...');
     }
 
     main().catch(err => console.error(LOG_PREFIX, err));

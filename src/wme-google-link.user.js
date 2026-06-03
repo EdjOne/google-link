@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.11
+// @version             1.7.12
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.11 loaded =====');
+    console.log('[GL] ===== v1.7.12 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     const _origAttachShadow = Element.prototype.attachShadow;
@@ -26,7 +26,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.11';
+    b.textContent = 'GL v1.7.12';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -247,28 +247,35 @@
             return null;
         }
 
+        // 1. Google pac-target-input GLOBALLY first (this is the autocomplete after clicking button)
+        let gpac = document.querySelector('.pac-target-input');
+        if (gpac) { console.log(L, 'Found: .pac-target-input (global)'); return gpac; }
+
         if (editPanel) {
-            // 1. Direct .pac-target-input in edit-panel
+            // 2. pac-target-input inside edit-panel
             let inp = editPanel.querySelector('.pac-target-input');
             if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
 
-            // 2. Direct visible <input> or textarea in edit-panel
+            // 3. Direct visible <input> in edit-panel (skip WME search bar)
             const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
             for (const i of panelInputs) {
                 const vis = (i.offsetParent !== null || i.offsetWidth > 0);
                 const inOurPanel = i.closest('#gl-p');
-                if (vis && !inOurPanel) {
-                    console.log(L, 'Found direct input in edit-panel:', i.tagName, i.placeholder || i.getAttribute('aria-label') || '');
+                const ph = (i.placeholder || '').toLowerCase();
+                // Skip WME search bar ("Искать POI" / "Search POI")
+                const isWmeSearch = ph.includes('искать') || ph.includes('search') || ph.includes('poi');
+                if (vis && !inOurPanel && !isWmeSearch) {
+                    console.log(L, 'Found direct input in edit-panel:', i.tagName, i.placeholder || '');
                     return i;
                 }
             }
 
-            // 3. Deep shadow DOM search in edit-panel
+            // 4. Deep shadow DOM search in edit-panel
             console.log(L, 'Searching shadow DOM in edit-panel...');
             const si = findInShadow(editPanel, 0);
             if (si) return si;
 
-            // 4. Also try #left-panel
+            // 5. Also try #left-panel
             const leftPanel = document.querySelector('#left-panel');
             if (leftPanel) {
                 const li = findInShadow(leftPanel, 0);
@@ -276,17 +283,15 @@
             }
         }
 
-        // 5. Global .pac-target-input
-        let inp = document.querySelector('.pac-target-input');
-        if (inp) { console.log(L, 'Found: .pac-target-input (global)'); return inp; }
-
-        // 6. Any visible input/textarea/contenteditable (excluding our panel)
+        // 6. Any visible input/textarea/contenteditable (excluding our panel and WME search)
         const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
         for (const i of allInputs) {
             const vis = (i.offsetParent !== null || i.offsetWidth > 0);
             const inOurPanel = i.closest('#gl-p');
-            if (vis && !inOurPanel) {
-                console.log(L, 'Fallback input:', i.tagName, i.placeholder || i.getAttribute('aria-label') || '');
+            const ph = (i.placeholder || '').toLowerCase();
+            const isWmeSearch = ph.includes('искать') || ph.includes('search') || ph.includes('poi');
+            if (vis && !inOurPanel && !isWmeSearch) {
+                console.log(L, 'Fallback input:', i.tagName, i.placeholder || '');
                 return i;
             }
         }

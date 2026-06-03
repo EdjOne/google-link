@@ -75,7 +75,7 @@
     const L = '[GL]';
     const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
     let sdk = null, ac = null, ps = null, lastVid = null;
-    let tabLabel = null, tabPane = null, resultsDiv = null;
+    let tabLabel = null, tabPane = null;
 
     // Haversine distance in meters
     function haversine(lat1, lon1, lat2, lon2) {
@@ -123,11 +123,9 @@
                             Радиус: <input id="gl-radius" type="number" min="100" max="50000" step="100" value="${radius}" style="width:65px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" /> м
                         </span>
                     </div>
-                    <div style="font-size:12px;color:#888;margin-bottom:8px;">Выбери POI на карте для поиска</div>
-                    <div id="gl-results"></div>
+                    <div style="font-size:12px;color:#888;">Выбери POI на карте для поиска</div>
                 </div>
             `;
-            resultsDiv = tabPane.querySelector('#gl-results');
 
             // Checkbox: show distance
             const chkDist = tabPane.querySelector('#gl-chk-dist');
@@ -136,8 +134,6 @@
                     const on = chkDist.hasAttribute('checked');
                     on ? chkDist.removeAttribute('checked') : chkDist.setAttribute('checked', '');
                     LS.setShowDistance(!on);
-                    // Re-render last results if any
-                    if (lastVid) show(lastVid);
                 });
             }
 
@@ -196,7 +192,7 @@
             show(vid);
         } else if (!vid && lastVid) {
             lastVid = null;
-            if (resultsDiv) resultsDiv.innerHTML = '<div style="font-size:12px;color:#888;">Выбери POI на карте для поиска</div>';
+            const p = document.getElementById('gl-p'); if (p) p.remove();
         }
     }
 
@@ -394,21 +390,29 @@
     }
 
     async function show(vid) {
+        // Remove old floating panel
+        const old = document.getElementById('gl-p'); if (old) old.remove();
+
         const query = q(vid);
-        if (!query) {
-            if (resultsDiv) resultsDiv.innerHTML = '<div style="font-size:12px;color:#999;">Нет адреса у этого POI</div>';
-            return;
-        }
-        if (!resultsDiv) return;
+        if (!query) return;
 
-        resultsDiv.innerHTML = `
-            <div style="font-weight:bold;margin-bottom:2px;font-size:13px;">${nm(vid) || 'POI'}</div>
-            <div style="color:#666;font-size:11px;margin-bottom:6px;word-break:break-all;">${query}</div>
-            <div id="gl-searching" style="color:#666;font-size:12px;">⏳ Поиск...</div>
+        // Create floating panel
+        const p = document.createElement('div');
+        p.id = 'gl-p';
+        p.style.cssText = 'position:fixed;top:80px;right:20px;width:400px;max-height:520px;background:#fff;border:1px solid #ccc;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:10000;font:13px/1.4 Arial;overflow:hidden;display:flex;flex-direction:column;';
+        p.innerHTML = `
+            <div style="background:#4285f4;color:#fff;padding:8px 12px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;">
+                <span>🔍 Google Link</span>
+                <button id="gl-close" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">×</button>
+            </div>
+            <div style="padding:10px;">
+                <div style="font-weight:bold;margin-bottom:2px;">${nm(vid) || 'POI'}</div>
+                <div style="color:#888;font-size:11px;margin-bottom:6px;word-break:break-all;">${query}</div>
+                <div id="gl-r"><div style="color:#666;">⏳ Поиск...</div></div>
+            </div>
         `;
-
-        // Activate sidebar tab
-        if (tabLabel) tabLabel.click();
+        document.body.appendChild(p);
+        document.getElementById('gl-close').addEventListener('click', () => p.remove());
 
         // Ensure PlacesService
         if (!ps) {
@@ -422,11 +426,7 @@
                 }
             } catch (_) {}
         }
-        if (!ps) {
-            const el = resultsDiv.querySelector('#gl-searching');
-            if (el) el.innerHTML = '<span style="color:#ea4335;">Google Places API not ready</span>';
-            return;
-        }
+        if (!ps) { document.getElementById('gl-r').innerHTML = '<div style="color:#ea4335;">Google Places API not ready</div>'; return; }
 
         const loc = ll(vid);
         const radius = LS.maxRadius();
@@ -435,18 +435,15 @@
 
         ps.textSearch(opts, (results, status) => {
             console.log(L, 'Results:', status, results?.length || 0);
-            const searching = resultsDiv.querySelector('#gl-searching');
-            if (!searching) return;
-            if (status !== 'OK' || !results?.length) {
-                searching.innerHTML = '<span style="color:#999;">Ничего не найдено</span>';
-                return;
-            }
-            searching.remove();
+            const r = document.getElementById('gl-r');
+            if (!r) return;
+            if (status !== 'OK' || !results?.length) { r.innerHTML = '<div style="color:#999;">Ничего не найдено</div>'; return; }
+            r.innerHTML = '';
 
             const showDist = LS.showDistance();
             for (const res of results) {
                 const d = document.createElement('div');
-                d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;font-size:12px;';
+                d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;';
 
                 let distHtml = '';
                 if (showDist && loc && res.geometry?.location) {
@@ -454,11 +451,11 @@
                         const rl = res.geometry.location;
                         const dist = haversine(loc.lat, loc.lng, rl.lat(), rl.lng());
                         const color = dist < 50 ? '#34a853' : dist < 300 ? '#f9a825' : '#ea4335';
-                        distHtml = `<span style="color:${color};font-weight:bold;">📍 ${fmtDist(dist)}</span> `;
+                        distHtml = `<br><small style="color:${color};">📍 ${fmtDist(dist)}</small>`;
                     } catch (_) {}
                 }
 
-                d.innerHTML = `<div>${distHtml}<b>${res.name || ''}</b></div><div style="color:#888;font-size:11px;">${res.formatted_address || ''}</div><div style="color:#aaa;font-size:10px;word-break:break-all;">${res.place_id}</div>`;
+                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${res.place_id}</small>`;
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
                 d.onclick = () => {
@@ -471,7 +468,7 @@
                         d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>';
                     }
                 };
-                resultsDiv.appendChild(d);
+                r.appendChild(d);
             }
         });
     }

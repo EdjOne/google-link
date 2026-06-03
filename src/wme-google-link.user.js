@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.21
+// @version             1.7.22
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -10,31 +10,46 @@
 // @match               *://editor-beta.waze.com/*
 // @match               *://beta.waze.com/*/editor*
 // @grant               none
-// @run-at              document-idle
+// @run-at              document-start
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.21 loaded =====');
+    console.log('[GL] ===== v1.7.22 loaded =====');
 
-    // Force ALL shadow roots to be open — inject into page context BEFORE WME loads
-    try {
-        const s = document.createElement('script');
-        s.textContent = '(' + function() {
-            var orig = Element.prototype.attachShadow;
-            Element.prototype.attachShadow = function(init) {
-                var safe = init || {};
-                var mode = safe.mode === 'closed' ? 'open' : safe.mode;
-                return orig.call(this, Object.assign({}, safe, { mode: mode }));
-            };
-        } + ')();';
-        (document.head || document.documentElement).prepend(s);
-        s.remove();
-        console.log('[GL] attachShadow patch injected into page');
-    } catch (e) { console.warn('[GL] attachShadow injection failed:', e); }
+    // Force ALL shadow roots to be open — must run BEFORE any web components
+    // At document-start, document.head may not exist yet, so use MutationObserver
+    function injectPatch() {
+        try {
+            const s = document.createElement('script');
+            s.textContent = '(' + function() {
+                var orig = Element.prototype.attachShadow;
+                Element.prototype.attachShadow = function(init) {
+                    var safe = init || {};
+                    var mode = safe.mode === 'closed' ? 'open' : safe.mode;
+                    return orig.call(this, Object.assign({}, safe, { mode: mode }));
+                };
+            } + ')();';
+            (document.head || document.documentElement).prepend(s);
+            s.remove();
+            console.log('[GL] attachShadow patch injected');
+        } catch (e) { console.warn('[GL] patch injection failed:', e); }
+    }
+
+    if (document.head || document.documentElement) {
+        injectPatch();
+    } else {
+        // document-start: wait for <head> to appear
+        new MutationObserver(function(mutations, obs) {
+            if (document.head || document.documentElement) {
+                obs.disconnect();
+                injectPatch();
+            }
+        }).observe(document, { childList: true, subtree: true });
+    }
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.21';
+    b.textContent = 'GL v1.7.22';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 

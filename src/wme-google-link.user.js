@@ -523,7 +523,7 @@
                     console.log(L, 'Enter sent');
                     setTimeout(() => {
                         d.innerHTML += '<br><small style="color:#34a853;">✅ Обрано! Перевір та збережи.</small>';
-                    }, 500);
+                    }, 300);
                 }, 520);
             } else {
                 waitAndFill(addr, d, attempt + 1);
@@ -554,7 +554,7 @@
                 if (items.length > 0) { items[0].click(); d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>'; return; }
             }
             waitForPac(d, addr, attempt + 1);
-        }, 500);
+        }, 300);
     }
 
     function linkPlace(addr, placeId, d) {

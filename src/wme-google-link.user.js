@@ -195,8 +195,11 @@
                     if (LS.showUnlinkedOnly()) {
                         try {
                             const v = sdk.DataModel.Venues.getById({ venueId: String(s.ids[0]) });
-                            if (v?.attributes?.externalProviderIDs?.length > 0) return null;
-                        } catch (_) {}
+                            // SDK uses camelCase 'externalProviderIds', raw model uses 'externalProviderIDs'
+                            const ep = v?.attributes?.externalProviderIds || v?.attributes?.externalProviderIDs;
+                            console.log(L, 'Unlinked check:', s.ids[0], 'externalProviderIds:', ep?.length || 0, ep);
+                            if (ep?.length > 0) return null;
+                        } catch (e) { console.warn(L, 'Unlinked check failed:', e); }
                     }
                     return String(s.ids[0]);
                 }
@@ -211,7 +214,8 @@
                 if (t === 'venue' && !attrs?.isPlaceholder) {
                     // If "unlinked only" is on, skip POIs that have externalProviderIDs
                     if (LS.showUnlinkedOnly()) {
-                        if (attrs?.externalProviderIDs?.length > 0) return null;
+                        const ep = attrs?.externalProviderIds || attrs?.externalProviderIDs;
+                        if (ep?.length > 0) return null;
                     }
                     return String(attrs?.id);
                 }

@@ -169,12 +169,17 @@
         try { uw.W.selectionManager.events.register('selectionchanged', null, onSel); } catch (_) {}
         setInterval(poll, 1000);
 
-        // Highlight unlinked on map events (zoom, pan)
-        if (LS.showUnlinkedOnly()) {
-            setTimeout(highlightUnlinked, 2000);
-            try { uw.W.map.events.register('zoomend', null, highlightUnlinked); } catch (_) {}
-            try { uw.W.map.events.register('moveend', null, highlightUnlinked); } catch (_) {}
+        // Highlight unlinked on map events (zoom, pan, save) — always register, check checkbox at call time
+        function applyHighlightsIfNeeded() {
+            if (LS.showUnlinkedOnly()) highlightUnlinked();
+            else resetHighlights();
         }
+        setTimeout(highlightUnlinked, 2000);
+        try { uw.W.map.events.register('zoomend', null, applyHighlightsIfNeeded); } catch (_) {}
+        try { uw.W.map.events.register('moveend', null, applyHighlightsIfNeeded); } catch (_) {}
+        // Re-highlight after save (DOM redraws POI markers)
+        try { uw.W.model.events.register('save', null, () => setTimeout(applyHighlightsIfNeeded, 500)); } catch (_) {}
+        try { sdk.Events.on({ eventName: 'wme-after-save', eventHandler: () => setTimeout(applyHighlightsIfNeeded, 500) }); } catch (_) {}
 
         console.log(L, '=== READY ===');
     }

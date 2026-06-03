@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.11.1
+// @version             1.11.2
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.11.1 loaded =====');
+    console.log('[GL] ===== v1.11.2 loaded =====');
 
     // --- Enable/Disable toggle ---
     const ENABLED_KEY = 'gl-enabled';
@@ -465,6 +465,17 @@
             for (const res of results) {
                 const gHN = extractHouseNum(res.formatted_address || '');
                 const gStreet = extractStreet(res.formatted_address || '');
+
+                // Skip if too far from POI
+                if (loc && res.geometry?.location) {
+                    try {
+                        const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
+                        if (dist > radius) {
+                            console.log(L, 'Skip (too far):', res.name, '—', fmtDist(dist));
+                            continue;
+                        }
+                    } catch (_) {}
+                }
 
                 // Skip if POI has house number but Google result doesn't
                 if (poiHN && !gHN) {

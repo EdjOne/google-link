@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.5
+// @version             1.7.6
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,11 +14,11 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.6.0 loaded =====');
+    console.log('[GL] ===== v1.7.6 loaded =====');
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.6.0';
+    b.textContent = 'GL v1.7.6';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -151,45 +151,40 @@
         return null;
     }
 
-    // Find Google autocomplete input — GLOBAL search after button click
+    // Find Google autocomplete input — edit panel first, then global fallback
     function findInput() {
-        // 1. Google pac-target-input (created globally as overlay)
-        let inp = document.querySelector('.pac-target-input');
-        if (inp) { console.log(L, 'Found: .pac-target-input'); return inp; }
+        const editPanel = document.querySelector('#edit-panel');
 
-        // 2. Any visible text input that appeared recently (exclude our panel)
-        const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
-        for (const i of allInputs) {
-            const vis = (i.offsetParent !== null || i.offsetWidth > 0);
-            const inOurPanel = i.closest('#gl-p');
-            const ph = (i.placeholder || '').toLowerCase();
-            console.log(L, '  Input:', i.type, 'vis:', vis, 'ph:', ph.substring(0, 30), 'our:', !!inOurPanel);
-            if (vis && !inOurPanel) return i;
-        }
+        // 1. pac-target-input inside edit-panel (External Services section)
+        if (editPanel) {
+            let inp = editPanel.querySelector('.pac-target-input');
+            if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
 
-        // 3. Shadow DOM - search ALL elements with shadowRoot
-        const allEls = document.querySelectorAll('*');
-        for (const el of allEls) {
-            if (!el.shadowRoot) continue;
-            const si = el.shadowRoot.querySelector('input:not([type="checkbox"]):not([type="hidden"])');
-            if (si) { console.log(L, 'Found: shadow input in', el.tagName); return si; }
-            // Also check nested shadow roots
-            const inner = el.shadowRoot.querySelectorAll('*');
-            for (const inn of inner) {
-                if (inn.shadowRoot) {
-                    const sii = inn.shadowRoot.querySelector('input');
-                    if (sii) { console.log(L, 'Found: nested shadow input'); return sii; }
+            // 2. Any visible text input inside edit-panel (not our panel)
+            const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+            for (const i of panelInputs) {
+                const vis = (i.offsetParent !== null || i.offsetWidth > 0);
+                const inOurPanel = i.closest('#gl-p');
+                if (vis && !inOurPanel) {
+                    console.log(L, 'Found input in edit-panel:', i.type, 'ph:', (i.placeholder || '').substring(0, 30));
+                    return i;
                 }
             }
         }
 
-        // 4. Check iframes
-        const iframes = document.querySelectorAll('iframe');
-        for (const f of iframes) {
-            try {
-                const fi = f.contentDocument?.querySelector('input');
-                if (fi && fi.offsetWidth > 30) { console.log(L, 'Found: iframe input'); return fi; }
-            } catch (_) {}
+        // 3. pac-target-input globally (fallback — may hit main WME search)
+        let inp = document.querySelector('.pac-target-input');
+        if (inp) { console.log(L, 'Found: .pac-target-input (global fallback)'); return inp; }
+
+        // 4. Any visible input outside our panel (last resort)
+        const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+        for (const i of allInputs) {
+            const vis = (i.offsetParent !== null || i.offsetWidth > 0);
+            const inOurPanel = i.closest('#gl-p');
+            if (vis && !inOurPanel) {
+                console.log(L, 'Fallback input:', i.type, 'ph:', (i.placeholder || '').substring(0, 30));
+                return i;
+            }
         }
 
         console.log(L, 'No input found anywhere');

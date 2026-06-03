@@ -667,10 +667,14 @@
                     console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN);
                     continue;
                 }
-                // Skip if POI has street but Google street doesn't match (fuzzy)
-                if (poiStreet && gStreet && !streetMatch(poiStreet, gStreet)) {
-                    console.log(L, 'Skip (street mismatch):', gStreet, '≠', poiStreet);
-                    continue;
+                // Street match: exact, fuzzy, or mark as mismatch
+                let streetLabel = '';
+                if (poiStreet && gStreet) {
+                    if (!streetMatch(poiStreet, gStreet)) {
+                        streetLabel = '⚠️ ' + gStreet;
+                    }
+                } else if (poiStreet && !gStreet) {
+                    streetLabel = '⚠️ ?';
                 }
 
                 const d = document.createElement('div');
@@ -687,7 +691,8 @@
                 }
 
                 const idLabel = isChIJ ? res.place_id : `<span style="color:#f9a825;">⚠️ ${res.place_id}</span>`;
-                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${idLabel}</small>`;
+                const streetWarn = streetLabel ? `<br><small style="color:#f9a825;">${streetLabel}</small>` : '';
+                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}${streetWarn}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${idLabel}</small>`;
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
                 d.onclick = () => {

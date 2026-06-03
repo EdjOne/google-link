@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.8.3
+// @version             1.8.4
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.8.3 loaded =====');
+    console.log('[GL] ===== v1.8.4 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.8.3';
+    b.textContent = 'GL v1.8.4';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -306,63 +306,21 @@
         }, 500);
     }
 
-    function linkPlace(venue, placeId, d) {
+    function linkPlace(addr, placeId, d) {
         try {
-            console.log(L, 'Venue id:', venue.id);
-            const existing = venue?.externalProviderIds || [];
+            console.log(L, 'linkPlace:', placeId, addr);
 
-            if (existing.some(ep => (ep.id || ep) === placeId)) {
-                d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Уже привязано</small>';
+            // Click the "Связать с Google" button
+            const btn = findLinkBtn();
+            if (!btn) {
+                d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка не найдена</small>';
                 return;
             }
+            console.log(L, 'Clicking button...');
+            btn.click();
 
-            const newProviders = [...existing, { provider: 'google', id: placeId }];
-
-            // Method 1: SDK updateVenue
-            try {
-                sdk.DataModel.Venues.updateVenue({
-                    venueId: venue.id,
-                    externalProviderIds: newProviders
-                });
-                console.log(L, 'updateVenue called');
-            } catch (e) { console.warn(L, 'updateVenue failed:', e.message); }
-
-            // Method 2: W.model.actionManager (legacy)
-            try {
-                if (typeof W !== 'undefined' && W.model && W.model.actionManager) {
-                    // Try to modify venue attributes directly
-                    const v = W.model.venues?.objects?.[venue.id];
-                    if (v) {
-                        console.log(L, 'Found venue in W.model.venues');
-                        v.attributes.externalProviderIDs = newProviders;
-                        v.save();
-                        console.log(L, 'venue.save() called');
-                    } else {
-                        console.log(L, 'venue not in W.model.venues, trying getObjectById...');
-                        const v2 = W.model.venues?.getObjectById?.(venue.id);
-                        if (v2) {
-                            v2.attributes.externalProviderIDs = newProviders;
-                            v2.save();
-                            console.log(L, 'venue.save() via getObjectById');
-                        } else {
-                            console.log(L, 'W.model.venues not available, keys:', Object.keys(W.model));
-                        }
-                    }
-                }
-            } catch (e) { console.warn(L, 'W.model failed:', e.message); }
-
-            d.innerHTML += '<br><small style="color:#4285f4;">⏳ Проверяю...</small>';
-
-            setTimeout(() => {
-                const v2 = sdk.DataModel.Venues.getById({ venueId: venue.id });
-                console.log(L, 'After update extProv:', JSON.stringify(v2?.externalProviderIds));
-                if (v2?.externalProviderIds?.length > 0) {
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Привязано! ' + placeId + '</small>';
-                } else {
-                    d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Не сохранено. Place ID: ' + placeId + '</small>';
-                }
-            }, 2000);
-
+            // Wait for the autocomplete to appear, then type the address
+            waitAndFill(addr, d, 0);
         } catch (e) {
             console.error(L, 'linkPlace error:', e);
             d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>';
@@ -408,23 +366,10 @@
                         const secText = p.structured_formatting?.secondary_text || '';
                         const addr = (mainText + ' ' + secText).trim();
                         d.style.background = '#e8f0fe';
-                        console.log(L, 'Linking place:', placeId, addr);
-
-                        // Debug: dump venue structure
-                        const venue = sdk.DataModel.Venues.getById({ venueId: vid });
-                        console.log(L, 'Venue type:', typeof venue, 'isPromise:', !!(venue && venue.then));
-                        if (venue && venue.then) {
-                            venue.then(v => {
-                                console.log(L, 'Venue (async):', JSON.stringify(v).substring(0, 500));
-                                linkPlace(v, placeId, d);
-                            });
-                        } else {
-                            console.log(L, 'Venue (sync):', JSON.stringify(venue).substring(0, 500));
-                            linkPlace(venue, placeId, d);
-                        }
+                        linkPlace(addr, placeId, d);
                     } catch (e) {
-                        console.error(L, 'Link error:', e);
-                        d.innerHTML += '<br><small style="color:#ea4335;">❌ Ошибка: ' + e.message + '</small>';
+                        console.error(L, 'Click error:', e);
+                        d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>';
                     }
                 };
                 r.appendChild(d);

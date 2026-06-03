@@ -431,7 +431,7 @@
 
     function waitAndFill(addr, d, attempt) {
         if (attempt > 20) {
-            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Поле не з'явилось. Встав вручну: ' + addr + '</small>';
+            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Поле не з\'явилось. Встав вручну: ' + addr + '</small>';
             navigator.clipboard.writeText(addr);
             return;
         }

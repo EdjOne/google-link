@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.9.1
+// @version             1.10.0
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.9.1 loaded =====');
+    console.log('[GL] ===== v1.10.0 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,13 +49,27 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.9.1';
+    b.textContent = 'GL v1.10.0';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
     const L = '[GL]';
     const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    let sdk = null, ac = null, lastVid = null;
+    let sdk = null, ac = null, ps = null, lastVid = null;
+
+    // Haversine distance in meters
+    function haversine(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const toRad = x => x * Math.PI / 180;
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function fmtDist(m) {
+        return m < 1000 ? Math.round(m) + ' м' : (m/1000).toFixed(1) + ' км';
+    }
 
     async function go() {
         console.log(L, 'init...');
@@ -76,7 +90,14 @@
             const g = uw.google?.maps?.places;
             if (g?.AutocompleteService) {
                 ac = new g.AutocompleteService();
-                console.log(L, 'Google ok');
+                console.log(L, 'AutocompleteService ok');
+            }
+            if (g?.PlacesService) {
+                const psDiv = document.createElement('div');
+                psDiv.style.display = 'none';
+                document.body.appendChild(psDiv);
+                ps = new g.PlacesService(psDiv);
+                console.log(L, 'PlacesService ok');
             }
         } catch (e) { console.warn(L, 'Google fail:', e); }
 
@@ -433,33 +454,51 @@
         document.getElementById('gl-close').addEventListener('click', function() { p.remove(); });
 
         // Search
-        if (!ac) {
-            try { const g = uw.google?.maps?.places; if (g?.AutocompleteService) ac = new g.AutocompleteService(); } catch (_) {}
+        if (!ps) {
+            try {
+                const g = uw.google?.maps?.places;
+                if (g?.PlacesService) {
+                    const psDiv = document.createElement('div');
+                    psDiv.style.display = 'none';
+                    document.body.appendChild(psDiv);
+                    ps = new g.PlacesService(psDiv);
+                }
+            } catch (_) {}
         }
-        if (!ac) { document.getElementById('gl-r').innerHTML = '<div style="color:#ea4335;">Google API not ready</div>'; return; }
+        if (!ps) { document.getElementById('gl-r').innerHTML = '<div style="color:#ea4335;">Google Places API not ready</div>'; return; }
 
         const loc = ll(vid);
-        const req = { input: query };
-        if (loc) { try { req.location = new google.maps.LatLng(loc.lat, loc.lng); req.radius = 5000; } catch (_) {} }
+        const opts = { query: query };
+        if (loc) { try { opts.location = new google.maps.LatLng(loc.lat, loc.lng); opts.radius = 5000; } catch (_) {} }
 
-        ac.getPlacePredictions(req, (preds, st) => {
-            console.log(L, 'Results:', st, preds?.length || 0);
+        ps.textSearch(opts, (results, status) => {
+            console.log(L, 'Results:', status, results?.length || 0);
             const r = document.getElementById('gl-r');
             if (!r) return;
-            if (st !== 'OK' || !preds?.length) { r.innerHTML = '<div style="color:#999;">No results</div>'; return; }
+            if (status !== 'OK' || !results?.length) { r.innerHTML = '<div style="color:#999;">No results</div>'; return; }
             r.innerHTML = '';
-            for (const p of preds) {
+            for (const res of results) {
                 const d = document.createElement('div');
                 d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;';
-                d.innerHTML = `<b>${p.structured_formatting?.main_text || p.description}</b><br><small style="color:#888;">${p.structured_formatting?.secondary_text || ''}</small><br><small style="color:#aaa;word-break:break-all;">${p.place_id}</small>`;
+
+                // Distance
+                let distHtml = '';
+                if (loc && res.geometry?.location) {
+                    try {
+                        const rl = res.geometry.location;
+                        const dist = haversine(loc.lat, loc.lng, rl.lat(), rl.lng());
+                        const color = dist < 50 ? '#34a853' : dist < 300 ? '#f9a825' : '#ea4335';
+                        distHtml = `<br><small style="color:${color};">📍 ${fmtDist(dist)}</small>`;
+                    } catch (_) {}
+                }
+
+                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}<br><small style="color:#aaa;word-break:break-all;">${res.place_id}</small>`;
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
                 d.onclick = () => {
                     try {
-                        const placeId = p.place_id;
-                        const mainText = p.structured_formatting?.main_text || p.description || '';
-                        const secText = p.structured_formatting?.secondary_text || '';
-                        const addr = (mainText + ' ' + secText).trim();
+                        const placeId = res.place_id;
+                        const addr = res.formatted_address || res.name || '';
                         d.style.background = '#e8f0fe';
                         linkPlace(addr, placeId, d);
                     } catch (e) {

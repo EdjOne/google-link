@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.13
+// @version             1.7.14
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.13 loaded =====');
+    console.log('[GL] ===== v1.7.14 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     const _origAttachShadow = Element.prototype.attachShadow;
@@ -26,7 +26,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.13';
+    b.textContent = 'GL v1.7.14';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -256,7 +256,12 @@
             let inp = editPanel.querySelector('.pac-target-input');
             if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
 
-            // 3. Direct visible <input> in edit-panel (skip only our GL panel)
+            // 3. Deep shadow DOM search FIRST (Google autocomplete is in shadow)
+            console.log(L, 'Searching shadow DOM in edit-panel...');
+            const si = findInShadow(editPanel, 0);
+            if (si) return si;
+
+            // 4. Direct visible <input> in edit-panel (skip only our GL panel)
             const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
             for (const i of panelInputs) {
                 const vis = (i.offsetParent !== null || i.offsetWidth > 0);
@@ -266,11 +271,6 @@
                     return i;
                 }
             }
-
-            // 4. Deep shadow DOM search in edit-panel
-            console.log(L, 'Searching shadow DOM in edit-panel...');
-            const si = findInShadow(editPanel, 0);
-            if (si) return si;
 
             // 5. Also try #left-panel
             const leftPanel = document.querySelector('#left-panel');

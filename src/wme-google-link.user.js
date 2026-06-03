@@ -332,11 +332,11 @@
         return dp[m][n];
     }
 
-    // Streets match if Levenshtein distance ≤ 2 (handles літавровий/литавровий, пров/провулок)
+    // Streets match if Levenshtein distance ≤ 3 (handles відрадний/отрадний, transliteration)
     function streetMatch(s1, s2) {
         if (!s1 || !s2) return true;
         if (s1 === s2) return true;
-        return levenshtein(s1, s2) <= 2;
+        return levenshtein(s1, s2) <= 3;
     }
 
     // --- Highlight unlinked POIs on map (like PlaceNames PLUS) ---

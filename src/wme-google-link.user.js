@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.10.0
+// @version             1.11.0
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -9,15 +9,46 @@
 // @match               *://editor.waze.com/*
 // @match               *://editor-beta.waze.com/*
 // @match               *://beta.waze.com/*/editor*
-// @grant               none
+// @grant               GM_getValue
+// @grant               GM_setValue
+// @grant               GM_registerMenuCommand
 // @run-at              document-start
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.10.0 loaded =====');
+    console.log('[GL] ===== v1.11.0 loaded =====');
 
-    // Force ALL shadow roots to be open — must run BEFORE any web components
-    // At document-start, document.head may not exist yet, so use MutationObserver
+    // --- Enable/Disable toggle ---
+    const ENABLED_KEY = 'gl-enabled';
+    let enabled = GM_getValue(ENABLED_KEY, true);
+
+    function updateMenu() {
+        GM_registerMenuCommand(
+            enabled ? '🟢 Google Link: ON' : '🔴 Google Link: OFF',
+            () => {
+                enabled = !enabled;
+                GM_setValue(ENABLED_KEY, enabled);
+                updateMenu();
+                location.reload();
+            }
+        );
+    }
+    updateMenu();
+
+    if (!enabled) { console.log('[GL] Disabled'); return; }
+
+    // --- Settings (localStorage) ---
+    const LS = {
+        _k: (k) => 'gl_' + k,
+        get: (k, def) => { const v = localStorage.getItem(LS._k(k)); return v === null ? def : JSON.parse(v); },
+        set: (k, v) => { localStorage.setItem(LS._k(k), JSON.stringify(v)); },
+        showDistance: () => LS.get('showDistance', true),
+        setShowDistance: (v) => LS.set('showDistance', v),
+        maxRadius: () => LS.get('maxRadius', 5000),
+        setMaxRadius: (v) => LS.set('maxRadius', v),
+    };
+
+    // Force ALL shadow roots to be open
     function injectPatch() {
         try {
             const s = document.createElement('script');
@@ -31,31 +62,20 @@
             } + ')();';
             (document.head || document.documentElement).prepend(s);
             s.remove();
-            console.log('[GL] attachShadow patch injected');
-        } catch (e) { console.warn('[GL] patch injection failed:', e); }
+        } catch (e) {}
     }
-
     if (document.head || document.documentElement) {
         injectPatch();
     } else {
-        // document-start: wait for <head> to appear
         new MutationObserver(function(mutations, obs) {
-            if (document.head || document.documentElement) {
-                obs.disconnect();
-                injectPatch();
-            }
+            if (document.head || document.documentElement) { obs.disconnect(); injectPatch(); }
         }).observe(document, { childList: true, subtree: true });
     }
-
-    // Badge
-    const b = document.createElement('div');
-    b.textContent = 'GL v1.10.0';
-    b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
-    document.body.appendChild(b);
 
     const L = '[GL]';
     const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
     let sdk = null, ac = null, ps = null, lastVid = null;
+    let tabLabel = null, tabPane = null, resultsDiv = null;
 
     // Haversine distance in meters
     function haversine(lat1, lon1, lat2, lon2) {
@@ -66,7 +86,6 @@
         const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
-
     function fmtDist(m) {
         return m < 1000 ? Math.round(m) + ' м' : (m/1000).toFixed(1) + ' км';
     }
@@ -74,24 +93,69 @@
     async function go() {
         console.log(L, 'init...');
 
-        // Wait WME
         for (let i = 0; i < 120; i++) {
             if (uw.W?.map && uw.W?.model && uw.W?.selectionManager && typeof uw.getWmeSdk === 'function') break;
             await new Promise(r => setTimeout(r, 500));
         }
-
-        if (!uw.getWmeSdk) { console.error(L, 'SDK not found'); b.style.background = '#ea4335'; return; }
+        if (!uw.getWmeSdk) { console.error(L, 'SDK not found'); return; }
 
         sdk = uw.getWmeSdk({ scriptId: 'gl', scriptName: 'GL' });
         console.log(L, 'SDK ok');
 
-        // Google
+        // --- Register sidebar tab ---
+        try {
+            const result = await sdk.Sidebar.registerScriptTab();
+            tabLabel = result.tabLabel;
+            tabPane = result.tabPane;
+            tabLabel.innerText = '🔍 GL';
+            tabLabel.title = 'Google Link — Search & link Google Places';
+
+            // Settings section
+            const showDist = LS.showDistance();
+            const radius = LS.maxRadius();
+
+            tabPane.innerHTML = `
+                <div style="padding:10px;">
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link</h3>
+                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                        <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''}>📍 Расстояние</wz-checkbox>
+                        <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
+                            Радиус: <input id="gl-radius" type="number" min="100" max="50000" step="100" value="${radius}" style="width:65px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" /> м
+                        </span>
+                    </div>
+                    <div style="font-size:12px;color:#888;margin-bottom:8px;">Выбери POI на карте для поиска</div>
+                    <div id="gl-results"></div>
+                </div>
+            `;
+            resultsDiv = tabPane.querySelector('#gl-results');
+
+            // Checkbox: show distance
+            const chkDist = tabPane.querySelector('#gl-chk-dist');
+            if (chkDist) {
+                chkDist.addEventListener('click', () => {
+                    const on = chkDist.hasAttribute('checked');
+                    on ? chkDist.removeAttribute('checked') : chkDist.setAttribute('checked', '');
+                    LS.setShowDistance(!on);
+                    // Re-render last results if any
+                    if (lastVid) show(lastVid);
+                });
+            }
+
+            // Input: radius
+            const radiusEl = tabPane.querySelector('#gl-radius');
+            if (radiusEl) {
+                radiusEl.addEventListener('change', () => {
+                    const v = Number(radiusEl.value);
+                    if (v >= 100 && v <= 50000) LS.setMaxRadius(v);
+                });
+            }
+
+            console.log(L, 'Sidebar tab registered');
+        } catch (e) { console.warn(L, 'Sidebar tab failed:', e); }
+
+        // Google Places
         try {
             const g = uw.google?.maps?.places;
-            if (g?.AutocompleteService) {
-                ac = new g.AutocompleteService();
-                console.log(L, 'AutocompleteService ok');
-            }
             if (g?.PlacesService) {
                 const psDiv = document.createElement('div');
                 psDiv.style.display = 'none';
@@ -107,8 +171,6 @@
         try { uw.W.selectionManager.events.register('selectionchanged', null, onSel); } catch (_) {}
         setInterval(poll, 1000);
 
-        b.style.background = '#34a853';
-        b.textContent = 'GL ✓';
         console.log(L, '=== READY ===');
     }
 
@@ -134,7 +196,7 @@
             show(vid);
         } else if (!vid && lastVid) {
             lastVid = null;
-            const p = document.getElementById('gl-p'); if (p) p.remove();
+            if (resultsDiv) resultsDiv.innerHTML = '<div style="font-size:12px;color:#888;">Выбери POI на карте для поиска</div>';
         }
     }
 
@@ -149,91 +211,55 @@
             return r.join(', ');
         } catch (_) { return ''; }
     }
-
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
 
-    // Find "+ Прив'язати до Google" / "+ Связать с Google" button
+    // Find "+ Прив'язати до Google" button
     function findLinkBtn() {
-        // 1. Light DOM
         const btn = document.querySelector('wz-button.external-provider-add-new');
-        if (btn) { console.log(L, 'Found button: light DOM'); return btn; }
-
-        // 2. Deep shadow DOM search — find any wz-button with class external-provider-add-new
+        if (btn) return btn;
         function findInShadow(root, depth) {
             if (!root || depth > 8) return null;
             const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
             for (const node of all) {
-                // Check if THIS element is the button
-                if (node.tagName === 'WZ-BUTTON' && node.classList?.contains('external-provider-add-new')) {
-                    console.log(L, 'Found button in shadow (depth ' + depth + ')');
-                    return node;
-                }
-                // Recurse into shadow root
-                if (node.shadowRoot) {
-                    const found = findInShadow(node.shadowRoot, depth + 1);
-                    if (found) return found;
-                }
+                if (node.tagName === 'WZ-BUTTON' && node.classList?.contains('external-provider-add-new')) return node;
+                if (node.shadowRoot) { const f = findInShadow(node.shadowRoot, depth + 1); if (f) return f; }
             }
             return null;
         }
-
-        // Search from document root
-        const found = findInShadow(document, 0);
+        let found = findInShadow(document, 0);
         if (found) return found;
-
-        // 3. Fallback: find any WZ-BUTTON with "Google" text in shadow DOM
         function findBtnByText(root, depth) {
             if (!root || depth > 8) return null;
             const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
             for (const node of all) {
                 if (node.tagName === 'WZ-BUTTON' && node.shadowRoot) {
                     const t = (node.shadowRoot.textContent || '').trim().toLowerCase();
-                    if (t.includes('google') && (t.includes('прив') || t.includes('связ'))) {
-                        console.log(L, 'Found button by text in shadow:', t.substring(0, 40));
-                        return node;
-                    }
+                    if (t.includes('google') && (t.includes('прив') || t.includes('связ'))) return node;
                 }
-                if (node.shadowRoot) {
-                    const found = findBtnByText(node.shadowRoot, depth + 1);
-                    if (found) return found;
-                }
+                if (node.shadowRoot) { const f = findBtnByText(node.shadowRoot, depth + 1); if (f) return f; }
             }
             return null;
         }
-
-        const textBtn = findBtnByText(document, 0);
-        if (textBtn) return textBtn;
-
-        console.log(L, 'Button not found');
-        return null;
+        return findBtnByText(document, 0);
     }
 
-    // Find Google autocomplete input — exact WME DOM structure
     function findInput() {
-        // 1. Try light DOM first: .external-provider-edit-form → wz-autocomplete
         const form = document.querySelector('.external-provider-edit-form');
         if (form) {
             const ac = form.querySelector('wz-autocomplete');
             if (ac && ac.shadowRoot) {
                 const inp = ac.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                if (inp) { console.log(L, 'Found: input in .external-provider-edit-form'); return inp; }
+                if (inp) return inp;
             }
         }
-
-        // 2. Search ALL wz-autocomplete elements (they might be in shadow DOM of wz-list-item)
         const allWzAC = document.querySelectorAll('wz-autocomplete');
         for (const ac of allWzAC) {
             if (ac.shadowRoot) {
                 const inp = ac.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
-                    console.log(L, 'Found: input in wz-autocomplete', ac.className || '');
-                    return inp;
-                }
+                if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) return inp;
             }
         }
-
-        // 3. Deep shadow DOM search: find wz-autocomplete inside any shadow root
         const editPanel = document.querySelector('#edit-panel');
         if (editPanel) {
             function findInShadow(root, depth) {
@@ -242,17 +268,11 @@
                 let node;
                 while (node = walker.nextNode()) {
                     if (node.shadowRoot) {
-                        const sr = node.shadowRoot;
-                        const tag = (node.tagName || '').toUpperCase();
-                        // Look for wz-autocomplete specifically
-                        if (tag === 'WZ-AUTOCOMPLETE') {
-                            const inp = sr.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                            if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
-                                console.log(L, 'Found: input in WZ-AUTOCOMPLETE (depth ' + depth + ')');
-                                return inp;
-                            }
+                        if ((node.tagName || '').toUpperCase() === 'WZ-AUTOCOMPLETE') {
+                            const inp = node.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                            if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) return inp;
                         }
-                        const deep = findInShadow(sr, depth + 1);
+                        const deep = findInShadow(node.shadowRoot, depth + 1);
                         if (deep) return deep;
                     }
                 }
@@ -261,16 +281,11 @@
             const si = findInShadow(editPanel, 0);
             if (si) return si;
         }
-
-        // 4. Global .pac-target-input (Google autocomplete creates this)
         let gpac = document.querySelector('.pac-target-input');
-        if (gpac) { console.log(L, 'Found: .pac-target-input (global)'); return gpac; }
-
-        console.log(L, 'No input found');
+        if (gpac) return gpac;
         return null;
     }
 
-    // Async wait-and-fill — type into whatever element has focus after button click
     function waitAndFill(addr, d, attempt) {
         if (attempt > 20) {
             d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Поле не появилось. Вставь вручную: ' + addr + '</small>';
@@ -280,30 +295,17 @@
         setTimeout(() => {
             let input = null;
             const active = document.activeElement;
-
-            // 1. Try direct input/textarea
             if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && active !== document.body) {
                 input = active;
-                console.log(L, 'Using activeElement:', active.tagName);
             }
-
-            // 2. Try shadow root of active element
             if (!input && active && active.shadowRoot) {
                 const si = active.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                if (si) {
-                    input = si;
-                    console.log(L, 'Using activeElement shadow input:', active.tagName);
-                }
+                if (si) input = si;
             }
-
-            // 3. Try findInput()
             if (!input) input = findInput();
-
             if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
-                console.log(L, 'Input found:', input.tagName, 'filling...');
                 d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю...</small>';
-                input.focus();
-                input.click();
+                input.focus(); input.click();
                 input.value = '';
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 let i = 0;
@@ -313,37 +315,26 @@
                         input.dispatchEvent(new Event('input', { bubbles: true }));
                         input.dispatchEvent(new KeyboardEvent('keydown', { key: addr[i], bubbles: true }));
                         input.dispatchEvent(new KeyboardEvent('keyup', { key: addr[i], bubbles: true }));
-                        i++;
-                        setTimeout(typeChar, 30);
+                        i++; setTimeout(typeChar, 30);
                     } else {
                         input.dispatchEvent(new Event('change', { bubbles: true }));
-                        console.log(L, 'Filled, waiting for pac-container...');
                         waitForPac(d, addr, 0);
                     }
                 };
                 typeChar();
             } else if (active && active.tagName && active.tagName.includes('-') && active !== document.body) {
-                // 4. Web component in focus but no shadow access — use execCommand + keyboard
-                console.log(L, 'Using execCommand on:', active.tagName);
                 d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю...</small>';
                 active.focus();
                 document.execCommand('selectAll', false, null);
                 document.execCommand('insertText', false, addr);
-                console.log(L, 'execCommand done, waiting for dropdown...');
-
-                // Wait for dropdown to appear, then select first item via Enter
                 setTimeout(() => {
                     const el = document.activeElement;
-                    console.log(L, 'Active element:', el?.tagName, 'sending Enter...');
-                    // The first item should already be highlighted when dropdown opens
                     el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
                     el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
                     el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                    console.log(L, 'Enter sent');
                     d.innerHTML += '<br><small style="color:#34a853;">✅ Выбрано! Проверь и сохрани.</small>';
                 }, 2000);
             } else {
-                if (attempt % 5 === 0) console.log(L, 'Waiting... attempt', attempt, 'active:', active?.tagName || 'none');
                 waitAndFill(addr, d, attempt + 1);
             }
         }, 300);
@@ -356,104 +347,70 @@
             return;
         }
         setTimeout(() => {
-            // 1. Standard Google .pac-container
             const pac = document.querySelector('.pac-container');
             if (pac && pac.style.display !== 'none') {
                 const items = pac.querySelectorAll('.pac-item');
-                if (items.length > 0) {
-                    console.log(L, 'Clicking pac-item:', items[0].textContent);
-                    items[0].click();
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>';
-                    return;
-                }
+                if (items.length > 0) { items[0].click(); d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>'; return; }
             }
-
-            // 2. WME wz-autocomplete dropdown — search in shadow root
             const ac = document.querySelector('.external-provider-edit-form wz-autocomplete') || document.querySelector('wz-autocomplete');
             if (ac && ac.shadowRoot) {
-                // Look for list items / options in the dropdown
                 const items = ac.shadowRoot.querySelectorAll('wz-list-item, .option, [role="option"], li');
-                if (items.length > 0) {
-                    console.log(L, 'Clicking autocomplete item:', items[0].textContent?.trim()?.substring(0, 50));
-                    items[0].click();
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово! (autocomplete)</small>';
-                    return;
-                }
-                // Also check for any visible dropdown
-                const dropdown = ac.shadowRoot.querySelector('.dropdown, .suggestions, [class*="list"], [class*="option"]');
-                if (dropdown) {
-                    console.log(L, 'Found dropdown:', dropdown.tagName, dropdown.className);
-                }
+                if (items.length > 0) { items[0].click(); d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>'; return; }
             }
-
-            // 3. Check for any newly appeared list/dropdown near the input
             const lists = document.querySelectorAll('.pac-container, [role="listbox"], .dropdown-menu, wz-list');
             for (const list of lists) {
                 const items = list.querySelectorAll('.pac-item, [role="option"], wz-list-item, li');
-                if (items.length > 0) {
-                    console.log(L, 'Clicking list item:', items[0].textContent?.trim()?.substring(0, 50));
-                    items[0].click();
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово! (list)</small>';
-                    return;
-                }
+                if (items.length > 0) { items[0].click(); d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>'; return; }
             }
-
-            if (attempt % 5 === 0) console.log(L, 'Waiting for suggestions... attempt', attempt);
             waitForPac(d, addr, attempt + 1);
         }, 500);
     }
 
     function linkPlace(addr, placeId, d) {
         try {
-            console.log(L, 'linkPlace:', placeId, addr);
-
-            // Step 1: Try to expand "Внешние сервисы" section first
             const expandBtn = document.querySelector('.external-providers-control .panel-title, .external-providers-control summary, .external-providers-control [data-toggle]');
-            if (expandBtn) {
-                console.log(L, 'Expanding external providers section...');
-                expandBtn.click();
-            }
-
-            // Step 2: Find and click the button (with retries)
+            if (expandBtn) expandBtn.click();
             findBtnWithRetry(addr, d, 0);
         } catch (e) {
-            console.error(L, 'linkPlace error:', e);
             d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>';
         }
     }
 
     function findBtnWithRetry(addr, d, attempt) {
         if (attempt > 10) {
-            d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка не найдена. Открой «Внешние сервисы» вручную.</small>';
+            d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка не найдена.</small>';
             return;
         }
         setTimeout(() => {
             const btn = findLinkBtn();
             if (btn) {
-                console.log(L, 'Button found, clicking...');
                 d.innerHTML += '<br><small style="color:#4285f4;">⏳ Открываю поиск...</small>';
                 btn.click();
-                // Wait for autocomplete to appear
                 waitAndFill(addr, d, 0);
             } else {
-                console.log(L, 'Button not found, retry', attempt);
                 findBtnWithRetry(addr, d, attempt + 1);
             }
         }, attempt === 0 ? 500 : 300);
     }
 
     async function show(vid) {
-        const old = document.getElementById('gl-p'); if (old) old.remove();
-        const query = q(vid); if (!query) return;
+        const query = q(vid);
+        if (!query) {
+            if (resultsDiv) resultsDiv.innerHTML = '<div style="font-size:12px;color:#999;">Нет адреса у этого POI</div>';
+            return;
+        }
+        if (!resultsDiv) return;
 
-        const p = document.createElement('div');
-        p.id = 'gl-p';
-        p.style.cssText = 'position:fixed;top:80px;right:20px;width:400px;max-height:520px;background:#fff;border:1px solid #ccc;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:10000;font:13px/1.4 Arial;overflow:hidden;';
-        p.innerHTML = `<div style="background:#4285f4;color:#fff;padding:8px 12px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;"><span>🔍 Google Link</span><button id="gl-close" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">×</button></div><div style="padding:10px;"><div style="font-weight:bold;margin-bottom:6px;">${nm(vid) || 'POI'}</div><input id="gl-i" type="text" value="${query}" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;" /><div id="gl-r"><div style="color:#666;">Searching...</div></div><div id="gl-hint" style="margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;font-size:12px;color:#555;display:none;"></div></div>`;
-        document.body.appendChild(p);
-        document.getElementById('gl-close').addEventListener('click', function() { p.remove(); });
+        resultsDiv.innerHTML = `
+            <div style="font-weight:bold;margin-bottom:2px;font-size:13px;">${nm(vid) || 'POI'}</div>
+            <div style="color:#666;font-size:11px;margin-bottom:6px;word-break:break-all;">${query}</div>
+            <div id="gl-searching" style="color:#666;font-size:12px;">⏳ Поиск...</div>
+        `;
 
-        // Search
+        // Activate sidebar tab
+        if (tabLabel) tabLabel.click();
+
+        // Ensure PlacesService
         if (!ps) {
             try {
                 const g = uw.google?.maps?.places;
@@ -465,34 +422,43 @@
                 }
             } catch (_) {}
         }
-        if (!ps) { document.getElementById('gl-r').innerHTML = '<div style="color:#ea4335;">Google Places API not ready</div>'; return; }
+        if (!ps) {
+            const el = resultsDiv.querySelector('#gl-searching');
+            if (el) el.innerHTML = '<span style="color:#ea4335;">Google Places API not ready</span>';
+            return;
+        }
 
         const loc = ll(vid);
+        const radius = LS.maxRadius();
         const opts = { query: query };
-        if (loc) { try { opts.location = new google.maps.LatLng(loc.lat, loc.lng); opts.radius = 5000; } catch (_) {} }
+        if (loc) { try { opts.location = new google.maps.LatLng(loc.lat, loc.lng); opts.radius = radius; } catch (_) {} }
 
         ps.textSearch(opts, (results, status) => {
             console.log(L, 'Results:', status, results?.length || 0);
-            const r = document.getElementById('gl-r');
-            if (!r) return;
-            if (status !== 'OK' || !results?.length) { r.innerHTML = '<div style="color:#999;">No results</div>'; return; }
-            r.innerHTML = '';
+            const searching = resultsDiv.querySelector('#gl-searching');
+            if (!searching) return;
+            if (status !== 'OK' || !results?.length) {
+                searching.innerHTML = '<span style="color:#999;">Ничего не найдено</span>';
+                return;
+            }
+            searching.remove();
+
+            const showDist = LS.showDistance();
             for (const res of results) {
                 const d = document.createElement('div');
-                d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;';
+                d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;font-size:12px;';
 
-                // Distance
                 let distHtml = '';
-                if (loc && res.geometry?.location) {
+                if (showDist && loc && res.geometry?.location) {
                     try {
                         const rl = res.geometry.location;
                         const dist = haversine(loc.lat, loc.lng, rl.lat(), rl.lng());
                         const color = dist < 50 ? '#34a853' : dist < 300 ? '#f9a825' : '#ea4335';
-                        distHtml = `<br><small style="color:${color};">📍 ${fmtDist(dist)}</small>`;
+                        distHtml = `<span style="color:${color};font-weight:bold;">📍 ${fmtDist(dist)}</span> `;
                     } catch (_) {}
                 }
 
-                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}<br><small style="color:#aaa;word-break:break-all;">${res.place_id}</small>`;
+                d.innerHTML = `<div>${distHtml}<b>${res.name || ''}</b></div><div style="color:#888;font-size:11px;">${res.formatted_address || ''}</div><div style="color:#aaa;font-size:10px;word-break:break-all;">${res.place_id}</div>`;
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
                 d.onclick = () => {
@@ -502,14 +468,13 @@
                         d.style.background = '#e8f0fe';
                         linkPlace(addr, placeId, d);
                     } catch (e) {
-                        console.error(L, 'Click error:', e);
                         d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>';
                     }
                 };
-                r.appendChild(d);
+                resultsDiv.appendChild(d);
             }
         });
     }
 
-    go().catch(e => { console.error(L, e); b.style.background = '#ea4335'; b.textContent = 'GL ERR'; });
+    go().catch(e => console.error(L, e));
 })();

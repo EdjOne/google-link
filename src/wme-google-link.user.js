@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.22
+// @version             1.8.0
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.22 loaded =====');
+    console.log('[GL] ===== v1.8.0 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.22';
+    b.textContent = 'GL v1.8.0';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -340,25 +340,36 @@
                 d.onmouseleave = () => d.style.background = '#fff';
                 d.onclick = () => {
                     try {
-                        const addressText = (p.structured_formatting?.main_text || '') + ' ' + (p.structured_formatting?.secondary_text || p.description || '');
-                        const addr = addressText.trim();
+                        const placeId = p.place_id;
+                        const mainText = p.structured_formatting?.main_text || p.description || '';
+                        const secText = p.structured_formatting?.secondary_text || '';
+                        const addr = (mainText + ' ' + secText).trim();
                         d.style.background = '#e8f0fe';
-                        d.innerHTML += '<br><small style="color:#4285f4;">⏳ Автопоиск...</small>';
+                        console.log(L, 'Linking place:', placeId, addr);
 
-                        // Step 1: Find and click button
-                        const btn = findLinkBtn();
-                        if (!btn) {
-                            d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка не найдена. Вставь: ' + addr + '</small>';
-                            navigator.clipboard.writeText(addr);
+                        // Get current venue to preserve existing providers
+                        const venue = sdk.DataModel.Venues.getById({ venueId: vid });
+                        const existing = venue?.externalProviderIds || [];
+
+                        // Check if already linked
+                        if (existing.some(ep => ep.id === placeId)) {
+                            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Уже привязано</small>';
                             return;
                         }
-                        console.log(L, 'Clicking:', btn.textContent?.trim());
-                        btn.click();
 
-                        // Step 2: Wait for input (async wait, non-blocking)
-                        waitAndFill(addr, d, 0);
+                        // Add new provider via SDK
+                        const newProviders = [...existing, { provider: 'google', id: placeId }];
+                        console.log(L, 'Updating venue with providers:', newProviders);
+
+                        sdk.DataModel.Venues.updateVenue({
+                            venueId: vid,
+                            externalProviderIds: newProviders
+                        });
+
+                        d.innerHTML += '<br><small style="color:#34a853;">✅ Привязано! Place ID: ' + placeId + '</small>';
+                        console.log(L, 'Linked successfully!');
                     } catch (e) {
-                        console.error(L, 'Click error:', e);
+                        console.error(L, 'Link error:', e);
                         d.innerHTML += '<br><small style="color:#ea4335;">❌ Ошибка: ' + e.message + '</small>';
                     }
                 };

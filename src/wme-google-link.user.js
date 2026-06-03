@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.12
+// @version             1.7.13
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.12 loaded =====');
+    console.log('[GL] ===== v1.7.13 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     const _origAttachShadow = Element.prototype.attachShadow;
@@ -26,7 +26,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.12';
+    b.textContent = 'GL v1.7.13';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -247,7 +247,7 @@
             return null;
         }
 
-        // 1. Google pac-target-input GLOBALLY first (this is the autocomplete after clicking button)
+        // 1. Google pac-target-input GLOBALLY first (created by Google Places API)
         let gpac = document.querySelector('.pac-target-input');
         if (gpac) { console.log(L, 'Found: .pac-target-input (global)'); return gpac; }
 
@@ -256,16 +256,13 @@
             let inp = editPanel.querySelector('.pac-target-input');
             if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
 
-            // 3. Direct visible <input> in edit-panel (skip WME search bar)
+            // 3. Direct visible <input> in edit-panel (skip only our GL panel)
             const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
             for (const i of panelInputs) {
                 const vis = (i.offsetParent !== null || i.offsetWidth > 0);
                 const inOurPanel = i.closest('#gl-p');
-                const ph = (i.placeholder || '').toLowerCase();
-                // Skip WME search bar ("Искать POI" / "Search POI")
-                const isWmeSearch = ph.includes('искать') || ph.includes('search') || ph.includes('poi');
-                if (vis && !inOurPanel && !isWmeSearch) {
-                    console.log(L, 'Found direct input in edit-panel:', i.tagName, i.placeholder || '');
+                if (vis && !inOurPanel) {
+                    console.log(L, 'Found direct input in edit-panel:', i.tagName, i.placeholder || '', 'name:', i.name || '');
                     return i;
                 }
             }
@@ -283,14 +280,12 @@
             }
         }
 
-        // 6. Any visible input/textarea/contenteditable (excluding our panel and WME search)
+        // 6. Any visible input/textarea/contenteditable (excluding our panel)
         const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
         for (const i of allInputs) {
             const vis = (i.offsetParent !== null || i.offsetWidth > 0);
             const inOurPanel = i.closest('#gl-p');
-            const ph = (i.placeholder || '').toLowerCase();
-            const isWmeSearch = ph.includes('искать') || ph.includes('search') || ph.includes('poi');
-            if (vis && !inOurPanel && !isWmeSearch) {
+            if (vis && !inOurPanel) {
                 console.log(L, 'Fallback input:', i.tagName, i.placeholder || '');
                 return i;
             }

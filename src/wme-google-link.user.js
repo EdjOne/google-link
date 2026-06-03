@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.11.3
+// @version             1.11.4
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.11.3 loaded =====');
+    console.log('[GL] ===== v1.11.4 loaded =====');
 
     // --- Enable/Disable toggle ---
     const ENABLED_KEY = 'gl-enabled';
@@ -234,6 +234,32 @@
             if (/^\d/.test(part)) return part.toLowerCase();
         }
         return '';
+    }
+
+    // Levenshtein distance (for fuzzy street matching)
+    function levenshtein(a, b) {
+        if (a === b) return 0;
+        if (!a.length) return b.length;
+        if (!b.length) return a.length;
+        const m = a.length, n = b.length;
+        const dp = Array.from({length: m + 1}, () => Array(n + 1).fill(0));
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                dp[i][j] = a[i-1] === b[j-1]
+                    ? dp[i-1][j-1]
+                    : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+            }
+        }
+        return dp[m][n];
+    }
+
+    // Streets match if Levenshtein distance ≤ 2 (handles літавровий/литавровий, пров/провулок)
+    function streetMatch(s1, s2) {
+        if (!s1 || !s2) return true;
+        if (s1 === s2) return true;
+        return levenshtein(s1, s2) <= 2;
     }
 
     // Find "+ Прив'язати до Google" button
@@ -495,8 +521,8 @@
                     console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN);
                     continue;
                 }
-                // Skip if POI has street but Google street doesn't match
-                if (poiStreet && gStreet && gStreet !== poiStreet) {
+                // Skip if POI has street but Google street doesn't match (fuzzy)
+                if (poiStreet && gStreet && !streetMatch(poiStreet, gStreet)) {
                     console.log(L, 'Skip (street mismatch):', gStreet, '≠', poiStreet);
                     continue;
                 }

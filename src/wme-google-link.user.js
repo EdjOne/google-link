@@ -224,12 +224,15 @@
                     try {
                         const v = sdk.DataModel.Venues.getById({ venueId: String(s.ids[0]) });
                         const a = v?.attributes || {};
-                        console.log(L, 'Venue:', s.ids[0], 'cat:', JSON.stringify(a.categories), 'res:', a.residential, 'isRes:', a.isResidential, 'placeholder:', a.isPlaceholder, 'name:', a.name);
-                        // Skip address points (RPP/AT): residential, placeholder, no categories, or non-POI entityType
-                        if (a.residential || a.isResidential) return null;
-                        if (a.isPlaceholder) return null;
-                        if (a.entityType && a.entityType !== 'poi') return null;
-                        if (!a.categories || a.categories.length === 0) { console.log(L, 'Skip: no categories'); return null; }
+                        // Also try legacy model (has more populated attributes)
+                        const lv = uw.W?.model?.venues?.getObjectById(s.ids[0]);
+                        const la = lv?.attributes || {};
+                        console.log(L, 'Venue:', s.ids[0], 'sdk:', JSON.stringify({cat: a.categories, res: a.residential, name: a.name}), 'legacy:', JSON.stringify({cat: la.categories, res: la.residential, name: la.name, entity: la.entityType}));
+                        // Use legacy attributes if SDK ones are empty
+                        const use = (a.categories || a.residential !== undefined) ? a : la;
+                        // Skip address points (RPP/AT): residential, placeholder
+                        if (use.residential || use.isResidential) return null;
+                        if (use.isPlaceholder) return null;
                         // If "unlinked only" is on, skip POIs that have externalProviderIDs
                         if (LS.showUnlinkedOnly()) {
                             const ep = a.externalProviderIds || a.externalProviderIDs;

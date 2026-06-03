@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.10
+// @version             1.7.11
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.10 loaded =====');
+    console.log('[GL] ===== v1.7.11 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     const _origAttachShadow = Element.prototype.attachShadow;
@@ -26,7 +26,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.10';
+    b.textContent = 'GL v1.7.11';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -109,47 +109,85 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
 
-    // Find "+ Прив'язати до Google" button — search everywhere
+    // Find "+ Прив'язати до Google" / "+ Связать с Google" button — language-agnostic
     function findLinkBtn() {
         const panel = document.querySelector('#edit-panel') || document.body;
 
-        // 1. XPath: find ANY element containing "Прив" and "Google"
-        const xp = document.evaluate(
-            '//*[contains(text(),"Прив") and contains(text(),"Google")]',
-            panel, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null
-        );
-        console.log(L, 'XPath results:', xp.snapshotLength);
-        for (let i = 0; i < xp.snapshotLength; i++) {
-            const el = xp.snapshotItem(i);
-            const t = (el.textContent || '').trim();
-            console.log(L, '  XPath:', t.substring(0, 50), '| tag:', el.tagName, '| len:', t.length);
-            if (t.length < 80) { return el; }
+        // Helper: does text look like the link-to-google button?
+        function isGoogleBtn(text) {
+            const low = text.toLowerCase();
+            return low.includes('google') && (low.includes('прив') || low.includes('связ'));
         }
 
-        // 2. Walk ALL elements, check direct text
+        // 1. XPath: search for either Ukrainian or Russian text
+        for (const xpath of [
+            '//*[contains(text(),"Прив") and contains(text(),"Google")]',
+            '//*[contains(text(),"Связ") and contains(text(),"Google")]'
+        ]) {
+            const xp = document.evaluate(xpath, panel, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            for (let i = 0; i < xp.snapshotLength; i++) {
+                const el = xp.snapshotItem(i);
+                const t = (el.textContent || '').trim();
+                if (t.length < 80 && el.tagName !== 'SCRIPT') {
+                    console.log(L, 'XPath match:', t.substring(0, 50), el.tagName);
+                    return el;
+                }
+            }
+        }
+
+        // 2. Prefer WZ-BUTTON elements with Google text (shadow DOM)
+        function findInShadow(root, depth) {
+            if (!root || depth > 5) return null;
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+            let node;
+            while (node = walker.nextNode()) {
+                if (node.shadowRoot) {
+                    const sr = node.shadowRoot;
+                    if (node.tagName && node.tagName.includes('-')) {
+                        const t = (sr.textContent || '').trim();
+                        if (isGoogleBtn(t) && t.length < 80) {
+                            console.log(L, 'Found WZ button in shadow:', node.tagName, t);
+                            return node;
+                        }
+                    }
+                    const deep = findInShadow(sr, depth + 1);
+                    if (deep) return deep;
+                }
+            }
+            return null;
+        }
+
+        const wzBtn = findInShadow(panel, 0);
+        if (wzBtn) return wzBtn;
+
+        // 3. Walk ALL elements, check direct text nodes
         const all = panel.querySelectorAll('*');
         for (const el of all) {
+            if (el.tagName === 'SCRIPT') continue;
             const own = Array.from(el.childNodes)
                 .filter(n => n.nodeType === 3)
                 .map(n => n.textContent.trim()).join(' ');
-            if (own.length < 60 && own.match(/прив/i) && own.match(/google/i)) {
-                console.log(L, 'Direct text:', own, el.tagName); return el;
+            if (own.length < 60 && isGoogleBtn(own)) {
+                console.log(L, 'Direct text:', own, el.tagName);
+                return el;
             }
         }
 
-        // 3. Full text match on short elements
+        // 4. Full text match on short elements
         for (const el of all) {
+            if (el.tagName === 'SCRIPT') continue;
             const t = (el.textContent || '').trim();
             if (t.length > 80) continue;
-            const low = t.toLowerCase();
-            if (low.includes('прив') && low.includes('google')) {
-                console.log(L, 'Full text match:', t.substring(0, 50), el.tagName); return el;
+            if (isGoogleBtn(t)) {
+                console.log(L, 'Full text match:', t.substring(0, 50), el.tagName);
+                return el;
             }
         }
 
-        // 4. Debug: dump all text that contains "Google"
+        // 5. Debug: dump all text that contains "Google"
         console.log(L, '--- Elements with "Google" text ---');
         for (const el of all) {
+            if (el.tagName === 'SCRIPT') continue;
             const t = (el.textContent || '').trim();
             if (t.length < 100 && t.toLowerCase().includes('google')) {
                 console.log(L, '  >', t.substring(0, 60), '|', el.tagName, '| children:', el.children.length);

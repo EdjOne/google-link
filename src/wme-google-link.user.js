@@ -210,6 +210,19 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }
+    function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
+
+    // Normalize street name: remove type prefix, lowercase, trim
+    const STREET_PREFIXES = /^(вул\.|вулиця|ул\.|улица|бульв\.|бульвар|просп\.|проспект|пров\.|провулок|пл\.|площа)\s*/i;
+    function normStreet(s) {
+        return (s || '').replace(STREET_PREFIXES, '').trim().toLowerCase();
+    }
+
+    // Extract street name from Google formatted_address first part
+    function extractStreet(formattedAddr) {
+        const first = (formattedAddr || '').split(',')[0] || '';
+        return first.replace(STREET_PREFIXES, '').trim().toLowerCase();
+    }
 
     // Extract house number from Google formatted_address (e.g., "вул. Магістральна, 68Б, Одеса..." → "68б")
     function extractHouseNum(formattedAddr) {
@@ -441,7 +454,8 @@
 
         const loc = ll(vid);
         const radius = LS.maxRadius();
-        const poiHN = hn(vid).toLowerCase(); // POI house number for filtering
+        const poiHN = hn(vid).toLowerCase();
+        const poiStreet = normStreet(st(vid));
         const opts = { query: query };
         if (loc) { try { opts.location = new google.maps.LatLng(loc.lat, loc.lng); opts.radius = radius; } catch (_) {} }
 
@@ -455,13 +469,16 @@
             const showDist = LS.showDistance();
             let shown = 0;
             for (const res of results) {
-                // Filter: skip if house number doesn't match
-                if (poiHN) {
-                    const gHN = extractHouseNum(res.formatted_address || '');
-                    if (gHN && gHN !== poiHN) {
-                        console.log(L, 'Skip (number mismatch):', res.name, '—', gHN, '≠', poiHN);
-                        continue;
-                    }
+                // Filter: skip if street or house number doesn't match
+                const gStreet = extractStreet(res.formatted_address || '');
+                const gHN = extractHouseNum(res.formatted_address || '');
+                if (poiStreet && gStreet && gStreet !== poiStreet) {
+                    console.log(L, 'Skip (street mismatch):', res.name, '—', gStreet, '≠', poiStreet);
+                    continue;
+                }
+                if (poiHN && gHN && gHN !== poiHN) {
+                    console.log(L, 'Skip (number mismatch):', res.name, '—', gHN, '≠', poiHN);
+                    continue;
                 }
 
                 const d = document.createElement('div');
@@ -494,7 +511,7 @@
                 shown++;
             }
             if (shown === 0) {
-                r.innerHTML = '<div style="color:#999;">Нет совпадений по номеру дома (' + poiHN + ')</div>';
+                r.innerHTML = '<div style="color:#999;">Нет совпадений' + (poiStreet ? ' по улице «' + poiStreet + '»' : '') + (poiHN ? ' №' + poiHN : '') + '</div>';
             }
         });
     }

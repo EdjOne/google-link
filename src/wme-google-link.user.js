@@ -640,11 +640,8 @@
             const showDist = LS.showDistance();
             let shown = 0;
             for (const res of results) {
-                // Skip protobuf-encoded Place IDs (textSearch bug — Waze can't save them)
-                if (!res.place_id?.startsWith('ChIJ')) {
-                    console.log(L, 'Skip (bad Place ID):', res.name, '—', (res.place_id || '').substring(0, 20));
-                    continue;
-                }
+                // Mark protobuf Place IDs (may not work with Waze)
+                const isChIJ = res.place_id?.startsWith('ChIJ');
 
                 const gHN = extractHouseNum(res.formatted_address || '');
                 const gStreet = extractStreet(res.formatted_address || '');
@@ -689,7 +686,8 @@
                     } catch (_) {}
                 }
 
-                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${res.place_id}</small>`;
+                const idLabel = isChIJ ? res.place_id : `<span style="color:#f9a825;">⚠️ ${res.place_id}</span>`;
+                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${idLabel}</small>`;
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
                 d.onclick = () => {

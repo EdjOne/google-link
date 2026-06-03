@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.6
+// @version             1.7.7
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,11 +14,11 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.6 loaded =====');
+    console.log('[GL] ===== v1.7.7 loaded =====');
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.6';
+    b.textContent = 'GL v1.7.7';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -155,12 +155,24 @@
     function findInput() {
         const editPanel = document.querySelector('#edit-panel');
 
-        // 1. pac-target-input inside edit-panel (External Services section)
+        // Helper: find real <input> inside a web component's shadow DOM
+        function shadowInput(root) {
+            if (!root) return null;
+            const hosts = root.querySelectorAll('*');
+            for (const h of hosts) {
+                if (!h.shadowRoot) continue;
+                const inp = h.shadowRoot.querySelector('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+                if (inp) return inp;
+            }
+            return null;
+        }
+
         if (editPanel) {
+            // 1. pac-target-input inside edit-panel
             let inp = editPanel.querySelector('.pac-target-input');
             if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
 
-            // 2. Any visible text input inside edit-panel (not our panel)
+            // 2. Visible <input> inside edit-panel (not our panel)
             const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
             for (const i of panelInputs) {
                 const vis = (i.offsetParent !== null || i.offsetWidth > 0);
@@ -170,13 +182,28 @@
                     return i;
                 }
             }
+
+            // 3. Shadow DOM inside edit-panel (wz-autocomplete, wz-text-input, etc.)
+            const si = shadowInput(editPanel);
+            if (si) { console.log(L, 'Found: shadow input in edit-panel'); return si; }
+
+            // 4. Search shadow roots deeper (nested web components)
+            const allEls = editPanel.querySelectorAll('*');
+            for (const el of allEls) {
+                if (!el.shadowRoot) continue;
+                const nested = el.shadowRoot.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+                for (const ni of nested) {
+                    const vis = (ni.offsetParent !== null || ni.offsetWidth > 0);
+                    if (vis) { console.log(L, 'Found: nested shadow input in', el.tagName); return ni; }
+                }
+            }
         }
 
-        // 3. pac-target-input globally (fallback — may hit main WME search)
+        // 5. pac-target-input globally (fallback)
         let inp = document.querySelector('.pac-target-input');
         if (inp) { console.log(L, 'Found: .pac-target-input (global fallback)'); return inp; }
 
-        // 4. Any visible input outside our panel (last resort)
+        // 6. Any visible input outside our panel (last resort)
         const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
         for (const i of allInputs) {
             const vis = (i.offsetParent !== null || i.offsetWidth > 0);

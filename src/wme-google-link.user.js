@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.8
+// @version             1.7.9
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,11 +14,11 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.8 loaded =====');
+    console.log('[GL] ===== v1.7.9 loaded =====');
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.8';
+    b.textContent = 'GL v1.7.9';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -155,23 +155,48 @@
     function findInput() {
         const editPanel = document.querySelector('#edit-panel');
 
-        // Helper: deeply search for <input> in all shadow roots (unlimited nesting)
+        // Helper: deeply search for <input> or <textarea> or contenteditable in all shadow roots
         function findInShadow(root, depth) {
             if (!root || depth > 5) return null;
             const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
             let node;
             while (node = walker.nextNode()) {
+                // Check shadow root of this node
                 if (node.shadowRoot) {
-                    // Check this shadow root
-                    const inp = node.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                    if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
-                        console.log(L, 'Found in shadow (depth ' + depth + '):', node.tagName, inp);
-                        return inp;
+                    const sr = node.shadowRoot;
+                    // Search for input/textarea/contenteditable in shadow root
+                    const candidates = sr.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"]), textarea, [contenteditable="true"]');
+                    for (const el of candidates) {
+                        const vis = (el.offsetParent !== null || el.offsetWidth > 0);
+                        if (vis) {
+                            console.log(L, 'Found in shadow (depth ' + depth + '):', node.tagName, el.tagName, el.placeholder || el.getAttribute('aria-label') || '');
+                            return el;
+                        }
                     }
                     // Recurse deeper
-                    const deep = findInShadow(node.shadowRoot, depth + 1);
+                    const deep = findInShadow(sr, depth + 1);
                     if (deep) return deep;
                 }
+            }
+            return null;
+        }
+
+        // Helper: search in iframes
+        function findInIframes() {
+            const iframes = document.querySelectorAll('iframe');
+            for (const f of iframes) {
+                try {
+                    const doc = f.contentDocument || f.contentWindow.document;
+                    if (!doc) continue;
+                    const inp = doc.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"]), textarea, [contenteditable="true"]');
+                    if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
+                        console.log(L, 'Found in iframe:', f.src);
+                        return inp;
+                    }
+                    // Also search shadow DOM inside iframe
+                    const deep = findInShadow(doc.body, 0);
+                    if (deep) return deep;
+                } catch (e) { /* cross-origin */ }
             }
             return null;
         }
@@ -181,13 +206,13 @@
             let inp = editPanel.querySelector('.pac-target-input');
             if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
 
-            // 2. Direct visible <input> in edit-panel
-            const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+            // 2. Direct visible <input> or textarea in edit-panel
+            const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
             for (const i of panelInputs) {
                 const vis = (i.offsetParent !== null || i.offsetWidth > 0);
                 const inOurPanel = i.closest('#gl-p');
                 if (vis && !inOurPanel) {
-                    console.log(L, 'Found direct input in edit-panel:', i.type, 'ph:', (i.placeholder || '').substring(0, 30));
+                    console.log(L, 'Found direct input in edit-panel:', i.tagName, i.placeholder || i.getAttribute('aria-label') || '');
                     return i;
                 }
             }
@@ -209,16 +234,21 @@
         let inp = document.querySelector('.pac-target-input');
         if (inp) { console.log(L, 'Found: .pac-target-input (global)'); return inp; }
 
-        // 6. Any visible input
-        const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+        // 6. Any visible input/textarea/contenteditable (excluding our panel)
+        const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
         for (const i of allInputs) {
             const vis = (i.offsetParent !== null || i.offsetWidth > 0);
             const inOurPanel = i.closest('#gl-p');
             if (vis && !inOurPanel) {
-                console.log(L, 'Fallback input:', i.type, 'ph:', (i.placeholder || '').substring(0, 30));
+                console.log(L, 'Fallback input:', i.tagName, i.placeholder || i.getAttribute('aria-label') || '');
                 return i;
             }
         }
+
+        // 7. Search iframes
+        console.log(L, 'Searching iframes...');
+        const fi = findInIframes();
+        if (fi) return fi;
 
         console.log(L, 'No input found anywhere');
         return null;

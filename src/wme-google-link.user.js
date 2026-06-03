@@ -9,31 +9,16 @@
 // @match               *://editor.waze.com/*
 // @match               *://editor-beta.waze.com/*
 // @match               *://beta.waze.com/*/editor*
-// @grant               GM_getValue
-// @grant               GM_setValue
-// @grant               GM_registerMenuCommand
+// @grant               none
 // @run-at              document-start
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.12.0 loaded =====');
+    console.log('[GL] ===== v1.12.3 loaded =====');
 
-    // --- Enable/Disable toggle ---
-    const ENABLED_KEY = 'gl-enabled';
-    let enabled = GM_getValue(ENABLED_KEY, true);
-
-    function updateMenu() {
-        GM_registerMenuCommand(
-            enabled ? '🟢 Google Link: ON' : '🔴 Google Link: OFF',
-            () => {
-                enabled = !enabled;
-                GM_setValue(ENABLED_KEY, enabled);
-                updateMenu();
-                location.reload();
-            }
-        );
-    }
-    updateMenu();
+    // --- Enable/Disable toggle (localStorage) ---
+    const ENABLED_KEY = 'gl_enabled';
+    let enabled = localStorage.getItem(ENABLED_KEY) !== 'false';
 
     if (!enabled) { console.log('[GL] Disabled'); return; }
 
@@ -119,7 +104,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link</h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.12.3</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''}>📍 Відстань</wz-checkbox>
                         <wz-checkbox id="gl-chk-unlinked" ${showUnlinked ? 'checked' : ''}>🔗 Тільки без посилань</wz-checkbox>

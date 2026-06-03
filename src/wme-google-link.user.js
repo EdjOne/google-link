@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.8.5
+// @version             1.8.6
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.8.5 loaded =====');
+    console.log('[GL] ===== v1.8.6 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.8.5';
+    b.textContent = 'GL v1.8.6';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -253,30 +253,34 @@
             return;
         }
         setTimeout(() => {
-            // Try to find the input in multiple ways
             let input = null;
 
-            // 1. Try focused element (button click should focus the input)
+            // 1. Try focused element
             const active = document.activeElement;
-            if (active && active !== document.body && active !== d) {
+            if (active && active !== document.body && !d.contains(active)) {
                 if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') {
                     input = active;
                     console.log(L, 'Using activeElement:', active.tagName, active.placeholder || '');
+                } else if (active.shadowRoot) {
+                    // Web component — find input inside its shadow root
+                    const si = active.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                    if (si) {
+                        input = si;
+                        console.log(L, 'Using activeElement shadow input:', active.tagName);
+                    }
                 }
             }
 
             // 2. Try findInput()
             if (!input) input = findInput();
 
-            if (input && input.tagName === 'INPUT') {
+            if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
                 console.log(L, 'Input found:', input.tagName, 'filling...');
                 d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю...</small>';
                 input.focus();
                 input.click();
-                // Clear first
                 input.value = '';
                 input.dispatchEvent(new Event('input', { bubbles: true }));
-                // Type char by char to trigger Google autocomplete
                 let i = 0;
                 const typeChar = () => {
                     if (i < addr.length) {
@@ -294,8 +298,7 @@
                 };
                 typeChar();
             } else {
-                // No input found yet, retry
-                if (attempt % 5 === 0) console.log(L, 'Waiting for input... attempt', attempt);
+                if (attempt % 5 === 0) console.log(L, 'Waiting for input... attempt', attempt, 'active:', active?.tagName || 'none');
                 waitAndFill(addr, d, attempt + 1);
             }
         }, 300);

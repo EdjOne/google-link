@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.8.7
+// @version             1.8.8
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.8.7 loaded =====');
+    console.log('[GL] ===== v1.8.8 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.8.7';
+    b.textContent = 'GL v1.8.8';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -258,24 +258,24 @@
         }
         setTimeout(() => {
             let input = null;
-
-            // 1. Try focused element
             const active = document.activeElement;
-            if (active && active !== document.body && !d.contains(active)) {
-                if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') {
-                    input = active;
-                    console.log(L, 'Using activeElement:', active.tagName, active.placeholder || '');
-                } else if (active.shadowRoot) {
-                    // Web component — find input inside its shadow root
-                    const si = active.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                    if (si) {
-                        input = si;
-                        console.log(L, 'Using activeElement shadow input:', active.tagName);
-                    }
+
+            // 1. Try direct input/textarea
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && active !== document.body) {
+                input = active;
+                console.log(L, 'Using activeElement:', active.tagName);
+            }
+
+            // 2. Try shadow root of active element
+            if (!input && active && active.shadowRoot) {
+                const si = active.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                if (si) {
+                    input = si;
+                    console.log(L, 'Using activeElement shadow input:', active.tagName);
                 }
             }
 
-            // 2. Try findInput()
+            // 3. Try findInput()
             if (!input) input = findInput();
 
             if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
@@ -301,8 +301,17 @@
                     }
                 };
                 typeChar();
+            } else if (active && active.tagName && active.tagName.includes('-') && active !== document.body) {
+                // 4. Web component in focus but no shadow access — use execCommand
+                console.log(L, 'Using execCommand on:', active.tagName);
+                d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю (execCommand)...</small>';
+                active.focus();
+                document.execCommand('selectAll', false, null);
+                document.execCommand('insertText', false, addr);
+                console.log(L, 'execCommand done, waiting for pac-container...');
+                setTimeout(() => waitForPac(d, addr, 0), 500);
             } else {
-                if (attempt % 5 === 0) console.log(L, 'Waiting for input... attempt', attempt, 'active:', active?.tagName || 'none');
+                if (attempt % 5 === 0) console.log(L, 'Waiting... attempt', attempt, 'active:', active?.tagName || 'none');
                 waitAndFill(addr, d, attempt + 1);
             }
         }, 300);

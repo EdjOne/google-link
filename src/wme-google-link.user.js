@@ -209,6 +209,17 @@
     }
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
+    function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }
+
+    // Extract house number from Google formatted_address (e.g., "вул. Магістральна, 68Б, Одеса..." → "68б")
+    function extractHouseNum(formattedAddr) {
+        const parts = formattedAddr.split(',').map(s => s.trim());
+        if (parts.length >= 2) {
+            const num = parts[1];
+            if (/\d/.test(num)) return num.toLowerCase();
+        }
+        return '';
+    }
 
     // Find "+ Прив'язати до Google" button
     function findLinkBtn() {
@@ -430,6 +441,7 @@
 
         const loc = ll(vid);
         const radius = LS.maxRadius();
+        const poiHN = hn(vid).toLowerCase(); // POI house number for filtering
         const opts = { query: query };
         if (loc) { try { opts.location = new google.maps.LatLng(loc.lat, loc.lng); opts.radius = radius; } catch (_) {} }
 
@@ -441,7 +453,17 @@
             r.innerHTML = '';
 
             const showDist = LS.showDistance();
+            let shown = 0;
             for (const res of results) {
+                // Filter: skip if house number doesn't match
+                if (poiHN) {
+                    const gHN = extractHouseNum(res.formatted_address || '');
+                    if (gHN && gHN !== poiHN) {
+                        console.log(L, 'Skip (number mismatch):', res.name, '—', gHN, '≠', poiHN);
+                        continue;
+                    }
+                }
+
                 const d = document.createElement('div');
                 d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;';
 
@@ -469,6 +491,10 @@
                     }
                 };
                 r.appendChild(d);
+                shown++;
+            }
+            if (shown === 0) {
+                r.innerHTML = '<div style="color:#999;">Нет совпадений по номеру дома (' + poiHN + ')</div>';
             }
         });
     }

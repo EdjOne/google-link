@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.19
+// @version             1.7.20
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.19 loaded =====');
+    console.log('[GL] ===== v1.7.20 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     try {
@@ -29,7 +29,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.19';
+    b.textContent = 'GL v1.7.20';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -166,43 +166,58 @@
 
     // Find Google autocomplete input — exact WME DOM structure
     function findInput() {
-        // 1. Exact path: wz-autocomplete inside .external-provider-edit-form
+        // 1. Try light DOM first: .external-provider-edit-form → wz-autocomplete
         const form = document.querySelector('.external-provider-edit-form');
         if (form) {
             const ac = form.querySelector('wz-autocomplete');
-            if (ac) {
-                // The actual <input> is inside wz-autocomplete's shadow root
-                if (ac.shadowRoot) {
-                    const inp = ac.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                    if (inp) {
-                        console.log(L, 'Found: input in wz-autocomplete shadow root');
-                        return inp;
-                    }
-                }
-                // Fallback: the wz-autocomplete itself might be focusable
-                console.log(L, 'Found: wz-autocomplete (no shadow input)');
-                return ac;
+            if (ac && ac.shadowRoot) {
+                const inp = ac.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                if (inp) { console.log(L, 'Found: input in .external-provider-edit-form'); return inp; }
             }
         }
 
-        // 2. Search inside edit-panel for wz-autocomplete in shadow DOM
+        // 2. Search ALL wz-autocomplete elements (they might be in shadow DOM of wz-list-item)
+        const allWzAC = document.querySelectorAll('wz-autocomplete');
+        for (const ac of allWzAC) {
+            if (ac.shadowRoot) {
+                const inp = ac.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
+                    console.log(L, 'Found: input in wz-autocomplete', ac.className || '');
+                    return inp;
+                }
+            }
+        }
+
+        // 3. Deep shadow DOM search: find wz-autocomplete inside any shadow root
         const editPanel = document.querySelector('#edit-panel');
         if (editPanel) {
-            const walker = document.createTreeWalker(editPanel, NodeFilter.SHOW_ELEMENT, null);
-            let node;
-            while (node = walker.nextNode()) {
-                if (node.shadowRoot && node.tagName === 'WZ-AUTOCOMPLETE') {
-                    const sr = node.shadowRoot;
-                    const inp = sr.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                    if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
-                        console.log(L, 'Found: input in WZ-AUTOCOMPLETE via tree walk');
-                        return inp;
+            function findInShadow(root, depth) {
+                if (!root || depth > 8) return null;
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+                let node;
+                while (node = walker.nextNode()) {
+                    if (node.shadowRoot) {
+                        const sr = node.shadowRoot;
+                        const tag = (node.tagName || '').toUpperCase();
+                        // Look for wz-autocomplete specifically
+                        if (tag === 'WZ-AUTOCOMPLETE') {
+                            const inp = sr.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                            if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
+                                console.log(L, 'Found: input in WZ-AUTOCOMPLETE (depth ' + depth + ')');
+                                return inp;
+                            }
+                        }
+                        const deep = findInShadow(sr, depth + 1);
+                        if (deep) return deep;
                     }
                 }
+                return null;
             }
+            const si = findInShadow(editPanel, 0);
+            if (si) return si;
         }
 
-        // 3. Global .pac-target-input (Google autocomplete creates this)
+        // 4. Global .pac-target-input (Google autocomplete creates this)
         let gpac = document.querySelector('.pac-target-input');
         if (gpac) { console.log(L, 'Found: .pac-target-input (global)'); return gpac; }
 

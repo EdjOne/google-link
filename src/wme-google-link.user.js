@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.15
+// @version             1.7.16
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.15 loaded =====');
+    console.log('[GL] ===== v1.7.16 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     const _origAttachShadow = Element.prototype.attachShadow;
@@ -26,7 +26,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.15';
+    b.textContent = 'GL v1.7.16';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -238,8 +238,36 @@
             const si = findInShadow(editPanel, 0);
             if (si) return si;
 
-            // 4. LAST visible input in edit-panel (search field is always at the bottom)
-            //    Skip our GL panel and pick the last one — that's "Искать POI"
+            // 4. elementsFromPoint: probe bottom of edit-panel (where "Искать POI" lives)
+            const rect = editPanel.getBoundingClientRect();
+            // "Искать POI" is at the very bottom of the visible panel
+            const probeY = rect.bottom - 20;
+            const probeX = rect.left + rect.width / 2;
+            console.log(L, 'Probing at:', Math.round(probeX), Math.round(probeY));
+            const elems = document.elementsFromPoint(probeX, probeY);
+            for (const el of elems) {
+                // Check if this element IS an input
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    console.log(L, 'Found via elementsFromPoint:', el.tagName, el.placeholder || el.name || '');
+                    return el;
+                }
+                // Check if this element CONTAINS an input (for web component host elements)
+                if (el.shadowRoot) {
+                    const si = el.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                    if (si) {
+                        console.log(L, 'Found via elementsFromPoint shadow:', el.tagName, si.placeholder || si.name || '');
+                        return si;
+                    }
+                }
+                // Check direct children
+                const inner = el.querySelector && el.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                if (inner) {
+                    console.log(L, 'Found via elementsFromPoint child:', el.tagName, inner.placeholder || inner.name || '');
+                    return inner;
+                }
+            }
+
+            // 5. Fallback: last visible input in light DOM
             const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
             let lastVisible = null;
             for (const i of panelInputs) {
@@ -247,33 +275,12 @@
                 const inOurPanel = i.closest('#gl-p');
                 if (vis && !inOurPanel) {
                     lastVisible = i;
-                    console.log(L, '  Candidate:', i.placeholder || i.name || i.type, '| id:', i.id || '');
                 }
             }
             if (lastVisible) {
-                console.log(L, 'Using LAST visible input:', lastVisible.placeholder || lastVisible.name || lastVisible.type);
+                console.log(L, 'Fallback last input:', lastVisible.placeholder || lastVisible.name || '');
                 return lastVisible;
             }
-
-            // 5. Shadow DOM in left-panel
-            const leftPanel = document.querySelector('#left-panel');
-            if (leftPanel) {
-                const li = findInShadow(leftPanel, 0);
-                if (li) { console.log(L, 'Found in left-panel shadow'); return li; }
-            }
-        }
-
-        // 6. Any visible input globally (last resort)
-        const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
-        let lastGlobal = null;
-        for (const i of allInputs) {
-            const vis = (i.offsetParent !== null || i.offsetWidth > 0);
-            const inOurPanel = i.closest('#gl-p');
-            if (vis && !inOurPanel) lastGlobal = i;
-        }
-        if (lastGlobal) {
-            console.log(L, 'Fallback LAST input:', lastGlobal.placeholder || lastGlobal.name || '');
-            return lastGlobal;
         }
 
         console.log(L, 'No input found anywhere');

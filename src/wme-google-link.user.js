@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.16
+// @version             1.7.17
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.16 loaded =====');
+    console.log('[GL] ===== v1.7.17 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     const _origAttachShadow = Element.prototype.attachShadow;
@@ -26,7 +26,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.16';
+    b.textContent = 'GL v1.7.17';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -209,11 +209,22 @@
             while (node = walker.nextNode()) {
                 if (node.shadowRoot) {
                     const sr = node.shadowRoot;
+                    const tag = (node.tagName || '').toUpperCase();
+
+                    // Skip WZ-TEXT-INPUT (that's "Введите название" — POI name field)
+                    // Skip WZ-CAPTION, WZ-MENU, etc.
+                    const skipTags = ['WZ-TEXT-INPUT', 'WZ-CAPTION', 'WZ-MENU', 'WZ-MENU-TITLE', 'WZ-BODY2', 'WZ-LIST-ITEM'];
+                    if (skipTags.includes(tag)) {
+                        const deep = findInShadow(sr, depth + 1);
+                        if (deep) return deep;
+                        continue;
+                    }
+
                     const candidates = sr.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"]), textarea, [contenteditable="true"]');
                     for (const el of candidates) {
                         const vis = (el.offsetParent !== null || el.offsetWidth > 0);
                         if (vis) {
-                            console.log(L, 'Found in shadow (depth ' + depth + '):', node.tagName, el.placeholder || el.getAttribute('aria-label') || '');
+                            console.log(L, 'Found in shadow (depth ' + depth + '):', tag, el.placeholder || el.getAttribute('aria-label') || '');
                             return el;
                         }
                     }

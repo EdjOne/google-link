@@ -592,6 +592,12 @@
             const showDist = LS.showDistance();
             let shown = 0;
             for (const res of results) {
+                // Skip protobuf-encoded Place IDs (textSearch bug — Waze can't save them)
+                if (!res.place_id?.startsWith('ChIJ')) {
+                    console.log(L, 'Skip (bad Place ID):', res.name, '—', (res.place_id || '').substring(0, 20));
+                    continue;
+                }
+
                 const gHN = extractHouseNum(res.formatted_address || '');
                 const gStreet = extractStreet(res.formatted_address || '');
 

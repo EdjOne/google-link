@@ -214,22 +214,23 @@
     }
 
     function getVid() {
-        // SDK API — only venue (POI), NOT place/RPP
+        // SDK API — only venue (POI), NOT place/RPP/address point
         try {
             const s = sdk?.Editing?.getSelection?.();
             if (s?.ids?.length === 1) {
                 const t = String(s?.objectType || '').toLowerCase();
                 if (t === 'venue') {
-                    // If "unlinked only" is on, skip POIs that have externalProviderIDs
-                    if (LS.showUnlinkedOnly()) {
-                        try {
-                            const v = sdk.DataModel.Venues.getById({ venueId: String(s.ids[0]) });
-                            // SDK uses camelCase 'externalProviderIds', raw model uses 'externalProviderIDs'
+                    try {
+                        const v = sdk.DataModel.Venues.getById({ venueId: String(s.ids[0]) });
+                        // Skip address points (RPP/AT): residential or placeholder
+                        if (v?.attributes?.residential || v?.attributes?.isPlaceholder) return null;
+                        // If "unlinked only" is on, skip POIs that have externalProviderIDs
+                        if (LS.showUnlinkedOnly()) {
                             const ep = v?.attributes?.externalProviderIds || v?.attributes?.externalProviderIDs;
                             console.log(L, 'Unlinked check:', s.ids[0], 'externalProviderIds:', ep?.length || 0, ep);
                             if (ep?.length > 0) return null;
-                        } catch (e) { console.warn(L, 'Unlinked check failed:', e); }
-                    }
+                        }
+                    } catch (e) { console.warn(L, 'Venue check failed:', e); }
                     return String(s.ids[0]);
                 }
             }
@@ -240,7 +241,7 @@
             if (f?.length === 1) {
                 const t = f[0]?.model?.type;
                 const attrs = f[0]?.model?.attributes;
-                if (t === 'venue' && !attrs?.isPlaceholder) {
+                if (t === 'venue' && !attrs?.isPlaceholder && !attrs?.residential) {
                     // If "unlinked only" is on, skip POIs that have externalProviderIDs
                     if (LS.showUnlinkedOnly()) {
                         const ep = attrs?.externalProviderIds || attrs?.externalProviderIDs;

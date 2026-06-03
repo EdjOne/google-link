@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.20
+// @version             1.7.21
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,22 +14,27 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.20 loaded =====');
+    console.log('[GL] ===== v1.7.21 loaded =====');
 
-    // Force ALL shadow roots to be open (so we can search inside them)
+    // Force ALL shadow roots to be open — inject into page context BEFORE WME loads
     try {
-        const _origAttachShadow = Element.prototype.attachShadow;
-        Element.prototype.attachShadow = function(init) {
-            const safe = init || {};
-            const mode = safe.mode === 'closed' ? 'open' : safe.mode;
-            console.log('[GL] attachShadow forced open:', this.tagName);
-            return _origAttachShadow.call(this, Object.assign({}, safe, { mode: mode }));
-        };
-    } catch (e) { console.warn('[GL] attachShadow override failed:', e); }
+        const s = document.createElement('script');
+        s.textContent = '(' + function() {
+            var orig = Element.prototype.attachShadow;
+            Element.prototype.attachShadow = function(init) {
+                var safe = init || {};
+                var mode = safe.mode === 'closed' ? 'open' : safe.mode;
+                return orig.call(this, Object.assign({}, safe, { mode: mode }));
+            };
+        } + ')();';
+        (document.head || document.documentElement).prepend(s);
+        s.remove();
+        console.log('[GL] attachShadow patch injected into page');
+    } catch (e) { console.warn('[GL] attachShadow injection failed:', e); }
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.20';
+    b.textContent = 'GL v1.7.21';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 

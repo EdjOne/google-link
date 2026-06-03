@@ -227,7 +227,6 @@
                         // Also try legacy model (has more populated attributes)
                         const lv = uw.W?.model?.venues?.getObjectById(s.ids[0]);
                         const la = lv?.attributes || {};
-                        console.log(L, 'Venue:', s.ids[0], 'sdk:', JSON.stringify({cat: a.categories, res: a.residential, name: a.name}), 'legacy:', JSON.stringify({cat: la.categories, res: la.residential, name: la.name, entity: la.entityType}));
                         // Use legacy attributes if SDK ones are empty
                         const use = (a.categories || a.residential !== undefined) ? a : la;
                         // Skip address points (RPP/AT): residential, placeholder
@@ -250,7 +249,6 @@
             if (f?.length === 1) {
                 const t = f[0]?.model?.type;
                 const attrs = f[0]?.model?.attributes;
-                console.log(L, 'Legacy selection:', { type: t, residential: attrs?.residential, isResidential: attrs?.isResidential, isPlaceholder: attrs?.isPlaceholder });
                 if (t === 'venue' && !attrs?.isPlaceholder && !attrs?.residential && !attrs?.isResidential) {
                     // If "unlinked only" is on, skip POIs that have externalProviderIDs
                     if (LS.showUnlinkedOnly()) {
@@ -295,7 +293,8 @@
     function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
 
     const STREET_PREFIXES = /^(вул\.|вулиця|ул\.|улица|бульв\.|бульвар|просп\.|проспект|пров\.|провулок|пл\.|площа)\s*/i;
-    function normStreet(s) { return (s || '').replace(STREET_PREFIXES, '').trim().toLowerCase(); }
+    const STREET_SUFFIXES = /\s+(вулиця|улица|бульвар|проспект|провулок|площа)$/i;
+    function normStreet(s) { return (s || '').replace(STREET_PREFIXES, '').replace(STREET_SUFFIXES, '').trim().toLowerCase(); }
 
     function extractStreet(formattedAddr) {
         const first = (formattedAddr || '').split(',')[0] || '';

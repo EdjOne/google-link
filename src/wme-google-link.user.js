@@ -224,11 +224,12 @@
                     try {
                         const v = sdk.DataModel.Venues.getById({ venueId: String(s.ids[0]) });
                         const a = v?.attributes || {};
+                        console.log(L, 'Venue:', s.ids[0], 'cat:', JSON.stringify(a.categories), 'res:', a.residential, 'isRes:', a.isResidential, 'placeholder:', a.isPlaceholder, 'name:', a.name);
                         // Skip address points (RPP/AT): residential, placeholder, no categories, or non-POI entityType
                         if (a.residential || a.isResidential) return null;
                         if (a.isPlaceholder) return null;
                         if (a.entityType && a.entityType !== 'poi') return null;
-                        if (!a.categories || a.categories.length === 0) return null;
+                        if (!a.categories || a.categories.length === 0) { console.log(L, 'Skip: no categories'); return null; }
                         // If "unlinked only" is on, skip POIs that have externalProviderIDs
                         if (LS.showUnlinkedOnly()) {
                             const ep = a.externalProviderIds || a.externalProviderIDs;

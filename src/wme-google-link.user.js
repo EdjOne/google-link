@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.11.5
+// @version             1.12.0
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.11.5 loaded =====');
+    console.log('[GL] ===== v1.12.0 loaded =====');
 
     // --- Enable/Disable toggle ---
     const ENABLED_KEY = 'gl-enabled';
@@ -44,6 +44,8 @@
         set: (k, v) => { localStorage.setItem(LS._k(k), JSON.stringify(v)); },
         showDistance: () => LS.get('showDistance', true),
         setShowDistance: (v) => LS.set('showDistance', v),
+        showUnlinkedOnly: () => LS.get('showUnlinkedOnly', false),
+        setShowUnlinkedOnly: (v) => LS.set('showUnlinkedOnly', v),
         maxRadius: () => LS.get('maxRadius', 5000),
         setMaxRadius: (v) => LS.set('maxRadius', v),
     };
@@ -112,6 +114,7 @@
 
             // Settings section
             const showDist = LS.showDistance();
+            const showUnlinked = LS.showUnlinkedOnly();
             const radius = LS.maxRadius();
 
             tabPane.innerHTML = `
@@ -119,6 +122,7 @@
                     <h3 style="margin:0 0 8px 0;">🔍 Google Link</h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''}>📍 Расстояние</wz-checkbox>
+                        <wz-checkbox id="gl-chk-unlinked" ${showUnlinked ? 'checked' : ''}>🔗 Только нелinks</wz-checkbox>
                         <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
                             Радиус: <input id="gl-radius" type="number" min="100" max="50000" step="100" value="${radius}" style="width:65px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" /> м
                         </span>
@@ -134,6 +138,16 @@
                     const on = chkDist.hasAttribute('checked');
                     on ? chkDist.removeAttribute('checked') : chkDist.setAttribute('checked', '');
                     LS.setShowDistance(!on);
+                });
+            }
+
+            // Checkbox: unlinked only
+            const chkUnlinked = tabPane.querySelector('#gl-chk-unlinked');
+            if (chkUnlinked) {
+                chkUnlinked.addEventListener('click', () => {
+                    const on = chkUnlinked.hasAttribute('checked');
+                    on ? chkUnlinked.removeAttribute('checked') : chkUnlinked.setAttribute('checked', '');
+                    LS.setShowUnlinkedOnly(!on);
                 });
             }
 
@@ -176,7 +190,16 @@
             const s = sdk?.Editing?.getSelection?.();
             if (s?.ids?.length === 1) {
                 const t = String(s?.objectType || '').toLowerCase();
-                if (t === 'venue') return String(s.ids[0]);
+                if (t === 'venue') {
+                    // If "unlinked only" is on, skip POIs that have externalProviderIDs
+                    if (LS.showUnlinkedOnly()) {
+                        try {
+                            const v = sdk.DataModel.Venues.getById({ venueId: String(s.ids[0]) });
+                            if (v?.attributes?.externalProviderIDs?.length > 0) return null;
+                        } catch (_) {}
+                    }
+                    return String(s.ids[0]);
+                }
             }
         } catch (_) {}
         // Legacy API — only type === 'venue'
@@ -185,7 +208,13 @@
             if (f?.length === 1) {
                 const t = f[0]?.model?.type;
                 const attrs = f[0]?.model?.attributes;
-                if (t === 'venue' && !attrs?.isPlaceholder) return String(attrs?.id);
+                if (t === 'venue' && !attrs?.isPlaceholder) {
+                    // If "unlinked only" is on, skip POIs that have externalProviderIDs
+                    if (LS.showUnlinkedOnly()) {
+                        if (attrs?.externalProviderIDs?.length > 0) return null;
+                    }
+                    return String(attrs?.id);
+                }
             }
         } catch (_) {}
         return null;

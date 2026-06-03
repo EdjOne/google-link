@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.14
+// @version             1.7.15
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.14 loaded =====');
+    console.log('[GL] ===== v1.7.15 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     const _origAttachShadow = Element.prototype.attachShadow;
@@ -26,7 +26,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.14';
+    b.textContent = 'GL v1.7.15';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -197,29 +197,26 @@
         return null;
     }
 
-    // Find Google autocomplete input — edit panel first, then global fallback
+    // Find Google autocomplete input — "Искать POI" in External Services section
     function findInput() {
         const editPanel = document.querySelector('#edit-panel');
 
-        // Helper: deeply search for <input> or <textarea> or contenteditable in all shadow roots
+        // Helper: deeply search for <input> in all shadow roots
         function findInShadow(root, depth) {
             if (!root || depth > 5) return null;
             const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
             let node;
             while (node = walker.nextNode()) {
-                // Check shadow root of this node
                 if (node.shadowRoot) {
                     const sr = node.shadowRoot;
-                    // Search for input/textarea/contenteditable in shadow root
                     const candidates = sr.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"]), textarea, [contenteditable="true"]');
                     for (const el of candidates) {
                         const vis = (el.offsetParent !== null || el.offsetWidth > 0);
                         if (vis) {
-                            console.log(L, 'Found in shadow (depth ' + depth + '):', node.tagName, el.tagName, el.placeholder || el.getAttribute('aria-label') || '');
+                            console.log(L, 'Found in shadow (depth ' + depth + '):', node.tagName, el.placeholder || el.getAttribute('aria-label') || '');
                             return el;
                         }
                     }
-                    // Recurse deeper
                     const deep = findInShadow(sr, depth + 1);
                     if (deep) return deep;
                 }
@@ -227,27 +224,7 @@
             return null;
         }
 
-        // Helper: search in iframes
-        function findInIframes() {
-            const iframes = document.querySelectorAll('iframe');
-            for (const f of iframes) {
-                try {
-                    const doc = f.contentDocument || f.contentWindow.document;
-                    if (!doc) continue;
-                    const inp = doc.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"]), textarea, [contenteditable="true"]');
-                    if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
-                        console.log(L, 'Found in iframe:', f.src);
-                        return inp;
-                    }
-                    // Also search shadow DOM inside iframe
-                    const deep = findInShadow(doc.body, 0);
-                    if (deep) return deep;
-                } catch (e) { /* cross-origin */ }
-            }
-            return null;
-        }
-
-        // 1. Google pac-target-input GLOBALLY first (created by Google Places API)
+        // 1. Global .pac-target-input (Google autocomplete creates this)
         let gpac = document.querySelector('.pac-target-input');
         if (gpac) { console.log(L, 'Found: .pac-target-input (global)'); return gpac; }
 
@@ -256,23 +233,29 @@
             let inp = editPanel.querySelector('.pac-target-input');
             if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
 
-            // 3. Deep shadow DOM search FIRST (Google autocomplete is in shadow)
+            // 3. Shadow DOM search
             console.log(L, 'Searching shadow DOM in edit-panel...');
             const si = findInShadow(editPanel, 0);
             if (si) return si;
 
-            // 4. Direct visible <input> in edit-panel (skip only our GL panel)
-            const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
+            // 4. LAST visible input in edit-panel (search field is always at the bottom)
+            //    Skip our GL panel and pick the last one — that's "Искать POI"
+            const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+            let lastVisible = null;
             for (const i of panelInputs) {
                 const vis = (i.offsetParent !== null || i.offsetWidth > 0);
                 const inOurPanel = i.closest('#gl-p');
                 if (vis && !inOurPanel) {
-                    console.log(L, 'Found direct input in edit-panel:', i.tagName, i.placeholder || '', 'name:', i.name || '');
-                    return i;
+                    lastVisible = i;
+                    console.log(L, '  Candidate:', i.placeholder || i.name || i.type, '| id:', i.id || '');
                 }
             }
+            if (lastVisible) {
+                console.log(L, 'Using LAST visible input:', lastVisible.placeholder || lastVisible.name || lastVisible.type);
+                return lastVisible;
+            }
 
-            // 5. Also try #left-panel
+            // 5. Shadow DOM in left-panel
             const leftPanel = document.querySelector('#left-panel');
             if (leftPanel) {
                 const li = findInShadow(leftPanel, 0);
@@ -280,21 +263,18 @@
             }
         }
 
-        // 6. Any visible input/textarea/contenteditable (excluding our panel)
-        const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"]), textarea, [contenteditable="true"]');
+        // 6. Any visible input globally (last resort)
+        const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
+        let lastGlobal = null;
         for (const i of allInputs) {
             const vis = (i.offsetParent !== null || i.offsetWidth > 0);
             const inOurPanel = i.closest('#gl-p');
-            if (vis && !inOurPanel) {
-                console.log(L, 'Fallback input:', i.tagName, i.placeholder || '');
-                return i;
-            }
+            if (vis && !inOurPanel) lastGlobal = i;
         }
-
-        // 7. Search iframes
-        console.log(L, 'Searching iframes...');
-        const fi = findInIframes();
-        if (fi) return fi;
+        if (lastGlobal) {
+            console.log(L, 'Fallback LAST input:', lastGlobal.placeholder || lastGlobal.name || '');
+            return lastGlobal;
+        }
 
         console.log(L, 'No input found anywhere');
         return null;

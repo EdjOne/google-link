@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.8.9
+// @version             1.9.0
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.8.9 loaded =====');
+    console.log('[GL] ===== v1.9.0 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.8.9';
+    b.textContent = 'GL v1.9.0';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -302,14 +302,30 @@
                 };
                 typeChar();
             } else if (active && active.tagName && active.tagName.includes('-') && active !== document.body) {
-                // 4. Web component in focus but no shadow access — use execCommand
+                // 4. Web component in focus but no shadow access — use execCommand + keyboard
                 console.log(L, 'Using execCommand on:', active.tagName);
-                d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю (execCommand)...</small>';
+                d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю...</small>';
                 active.focus();
                 document.execCommand('selectAll', false, null);
                 document.execCommand('insertText', false, addr);
-                console.log(L, 'execCommand done, waiting for pac-container...');
-                setTimeout(() => waitForPac(d, addr, 0), 500);
+                console.log(L, 'execCommand done, sending ArrowDown+Enter...');
+
+                // Wait for dropdown to appear, then select first item via keyboard
+                setTimeout(() => {
+                    const el = document.activeElement;
+                    // Send ArrowDown to open/navigate dropdown
+                    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+                    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+
+                    // Wait a bit then send Enter to select
+                    setTimeout(() => {
+                        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                        el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                        el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                        console.log(L, 'ArrowDown+Enter sent');
+                        d.innerHTML += '<br><small style="color:#34a853;">✅ Выбрано! Проверь и сохрани.</small>';
+                    }, 500);
+                }, 1000);
             } else {
                 if (attempt % 5 === 0) console.log(L, 'Waiting... attempt', attempt, 'active:', active?.tagName || 'none');
                 waitAndFill(addr, d, attempt + 1);
@@ -417,8 +433,9 @@
         const p = document.createElement('div');
         p.id = 'gl-p';
         p.style.cssText = 'position:fixed;top:80px;right:20px;width:400px;max-height:520px;background:#fff;border:1px solid #ccc;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:10000;font:13px/1.4 Arial;overflow:hidden;';
-        p.innerHTML = `<div style="background:#4285f4;color:#fff;padding:8px 12px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;"><span>🔍 Google Link</span><button onclick="document.getElementById('gl-p').remove()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">×</button></div><div style="padding:10px;"><div style="font-weight:bold;margin-bottom:6px;">${nm(vid) || 'POI'}</div><input id="gl-i" type="text" value="${query}" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;" /><div id="gl-r"><div style="color:#666;">Searching...</div></div><div id="gl-hint" style="margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;font-size:12px;color:#555;display:none;"></div></div>`;
+        p.innerHTML = `<div style="background:#4285f4;color:#fff;padding:8px 12px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;"><span>🔍 Google Link</span><button id="gl-close" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">×</button></div><div style="padding:10px;"><div style="font-weight:bold;margin-bottom:6px;">${nm(vid) || 'POI'}</div><input id="gl-i" type="text" value="${query}" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;" /><div id="gl-r"><div style="color:#666;">Searching...</div></div><div id="gl-hint" style="margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;font-size:12px;color:#555;display:none;"></div></div>`;
         document.body.appendChild(p);
+        document.getElementById('gl-close').addEventListener('click', function() { p.remove(); });
 
         // Search
         if (!ac) {

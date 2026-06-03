@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.12.2
+// @version             1.12.3
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -121,13 +121,13 @@
                 <div style="padding:10px;">
                     <h3 style="margin:0 0 8px 0;">🔍 Google Link</h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-                        <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''}>📍 Расстояние</wz-checkbox>
-                        <wz-checkbox id="gl-chk-unlinked" ${showUnlinked ? 'checked' : ''}>🔗 Только нелinks</wz-checkbox>
+                        <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''}>📍 Відстань</wz-checkbox>
+                        <wz-checkbox id="gl-chk-unlinked" ${showUnlinked ? 'checked' : ''}>🔗 Тільки без посилань</wz-checkbox>
                         <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
-                            Радиус: <input id="gl-radius" type="number" min="100" max="50000" step="100" value="${radius}" style="width:65px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" /> м
+                            Радіус: <input id="gl-radius" type="number" min="100" max="50000" step="100" value="${radius}" style="width:65px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" /> м
                         </span>
                     </div>
-                    <div style="font-size:12px;color:#888;">Выбери POI на карте для поиска</div>
+                    <div style="font-size:12px;color:#888;">Обери POI на карті для пошуку</div>
                 </div>
             `;
 
@@ -446,7 +446,7 @@
 
     function waitAndFill(addr, d, attempt) {
         if (attempt > 20) {
-            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Поле не появилось. Вставь вручную: ' + addr + '</small>';
+            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Поле не з'явилось. Встав вручну: ' + addr + '</small>';
             navigator.clipboard.writeText(addr);
             return;
         }
@@ -490,7 +490,7 @@
                     el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
                     el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
                     el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Выбрано! Проверь и сохрани.</small>';
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Обрано! Перевір та збережи.</small>';
                 }, 2000);
             } else {
                 waitAndFill(addr, d, attempt + 1);
@@ -500,7 +500,7 @@
 
     function waitForPac(d, addr, attempt) {
         if (attempt > 20) {
-            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Выбери результат вручную.</small>';
+            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Обери результат вручну.</small>';
             navigator.clipboard.writeText(addr);
             return;
         }
@@ -536,13 +536,13 @@
 
     function findBtnWithRetry(addr, d, attempt) {
         if (attempt > 10) {
-            d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка не найдена.</small>';
+            d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопку не знайдено.</small>';
             return;
         }
         setTimeout(() => {
             const btn = findLinkBtn();
             if (btn) {
-                d.innerHTML += '<br><small style="color:#4285f4;">⏳ Открываю поиск...</small>';
+                d.innerHTML += '<br><small style="color:#4285f4;">⏳ Відкриваю пошук...</small>';
                 btn.click();
                 waitAndFill(addr, d, 0);
             } else {
@@ -570,7 +570,7 @@
             <div style="padding:10px;">
                 <div style="font-weight:bold;margin-bottom:2px;">${nm(vid) || 'POI'}</div>
                 <div style="color:#888;font-size:11px;margin-bottom:6px;word-break:break-all;">${query}</div>
-                <div id="gl-r"><div style="color:#666;">⏳ Поиск...</div></div>
+                <div id="gl-r"><div style="color:#666;">⏳ Пошук...</div></div>
             </div>
         `;
         document.body.appendChild(p);
@@ -601,7 +601,7 @@
             console.log(L, 'Results:', status, results?.length || 0);
             const r = document.getElementById('gl-r');
             if (!r) return;
-            if (status !== 'OK' || !results?.length) { r.innerHTML = '<div style="color:#999;">Ничего не найдено</div>'; return; }
+            if (status !== 'OK' || !results?.length) { r.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>'; return; }
             r.innerHTML = '';
 
             const showDist = LS.showDistance();
@@ -667,7 +667,7 @@
                 shown++;
             }
             if (shown === 0) {
-                r.innerHTML = '<div style="color:#999;">Нет совпадений' + (poiStreet || poiHN ? ' — ' + (poiStreet ? '«' + poiStreet + '»' : '') + (poiHN ? ', №' + poiHN : '') : '') + '</div>';
+                r.innerHTML = '<div style="color:#999;">Немає збігів' + (poiStreet || poiHN ? ' — ' + (poiStreet ? '«' + poiStreet + '»' : '') + (poiHN ? ', №' + poiHN : '') : '') + '</div>';
             }
         });
     }

@@ -14,11 +14,19 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.9 loaded =====');
+    console.log('[GL] ===== v1.7.10 loaded =====');
+
+    // Force ALL shadow roots to be open (so we can search inside them)
+    const _origAttachShadow = Element.prototype.attachShadow;
+    Element.prototype.attachShadow = function(init) {
+        const mode = init && init.mode === 'closed' ? 'open' : (init && init.mode);
+        console.log('[GL] attachShadow forced open:', this.tagName);
+        return _origAttachShadow.call(this, { ...init, mode: mode });
+    };
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.9';
+    b.textContent = 'GL v1.7.10';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 

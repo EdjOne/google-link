@@ -470,37 +470,20 @@
                 active.focus();
                 document.execCommand('selectAll', false, null);
                 document.execCommand('insertText', false, addr);
-                console.log(L, 'execCommand done, waiting for dropdown...');
-                waitForDropdownThenEnter(d, 0);
+                console.log(L, 'execCommand done, waiting 2s for dropdown...');
+                setTimeout(() => {
+                    const el = document.activeElement;
+                    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                    console.log(L, 'Enter sent');
+                    setTimeout(() => {
+                        d.innerHTML += '<br><small style="color:#34a853;">✅ Обрано! Перевір та збережи.</small>';
+                    }, 500);
+                }, 2000);
             } else {
                 waitAndFill(addr, d, attempt + 1);
             }
         }, 300);
-    }
-
-    // Poll for dropdown appearance, then Enter to select first item
-    function waitForDropdownThenEnter(d, attempt) {
-        if (attempt > 40) { // max 4 seconds (40 × 100ms)
-            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Дропдаун не з\'явився.</small>';
-            return;
-        }
-        setTimeout(() => {
-            // Check for Google pac-container
-            const pac = document.querySelector('.pac-container');
-            if (pac && pac.style.display !== 'none') {
-                const items = pac.querySelectorAll('.pac-item');
-                if (items.length > 0) {
-                    console.log(L, 'Dropdown appeared, pressing Enter');
-                    const el = document.activeElement;
-                    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                    d.innerHTML += '<br><small style="color:#34a853;">✅ Обрано! Перевір та збережи.</small>';
-                    return;
-                }
-            }
-            waitForDropdownThenEnter(d, attempt + 1);
-        }, 100);
     }
 
     function waitForPac(d, addr, attempt) {

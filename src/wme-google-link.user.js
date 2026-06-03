@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.7
+// @version             1.7.8
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,11 +14,11 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.7 loaded =====');
+    console.log('[GL] ===== v1.7.8 loaded =====');
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.7';
+    b.textContent = 'GL v1.7.8';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -155,55 +155,61 @@
     function findInput() {
         const editPanel = document.querySelector('#edit-panel');
 
-        // Helper: find real <input> inside a web component's shadow DOM
-        function shadowInput(root) {
-            if (!root) return null;
-            const hosts = root.querySelectorAll('*');
-            for (const h of hosts) {
-                if (!h.shadowRoot) continue;
-                const inp = h.shadowRoot.querySelector('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
-                if (inp) return inp;
+        // Helper: deeply search for <input> in all shadow roots (unlimited nesting)
+        function findInShadow(root, depth) {
+            if (!root || depth > 5) return null;
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+            let node;
+            while (node = walker.nextNode()) {
+                if (node.shadowRoot) {
+                    // Check this shadow root
+                    const inp = node.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                    if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
+                        console.log(L, 'Found in shadow (depth ' + depth + '):', node.tagName, inp);
+                        return inp;
+                    }
+                    // Recurse deeper
+                    const deep = findInShadow(node.shadowRoot, depth + 1);
+                    if (deep) return deep;
+                }
             }
             return null;
         }
 
         if (editPanel) {
-            // 1. pac-target-input inside edit-panel
+            // 1. Direct .pac-target-input in edit-panel
             let inp = editPanel.querySelector('.pac-target-input');
             if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
 
-            // 2. Visible <input> inside edit-panel (not our panel)
+            // 2. Direct visible <input> in edit-panel
             const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
             for (const i of panelInputs) {
                 const vis = (i.offsetParent !== null || i.offsetWidth > 0);
                 const inOurPanel = i.closest('#gl-p');
                 if (vis && !inOurPanel) {
-                    console.log(L, 'Found input in edit-panel:', i.type, 'ph:', (i.placeholder || '').substring(0, 30));
+                    console.log(L, 'Found direct input in edit-panel:', i.type, 'ph:', (i.placeholder || '').substring(0, 30));
                     return i;
                 }
             }
 
-            // 3. Shadow DOM inside edit-panel (wz-autocomplete, wz-text-input, etc.)
-            const si = shadowInput(editPanel);
-            if (si) { console.log(L, 'Found: shadow input in edit-panel'); return si; }
+            // 3. Deep shadow DOM search in edit-panel
+            console.log(L, 'Searching shadow DOM in edit-panel...');
+            const si = findInShadow(editPanel, 0);
+            if (si) return si;
 
-            // 4. Search shadow roots deeper (nested web components)
-            const allEls = editPanel.querySelectorAll('*');
-            for (const el of allEls) {
-                if (!el.shadowRoot) continue;
-                const nested = el.shadowRoot.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
-                for (const ni of nested) {
-                    const vis = (ni.offsetParent !== null || ni.offsetWidth > 0);
-                    if (vis) { console.log(L, 'Found: nested shadow input in', el.tagName); return ni; }
-                }
+            // 4. Also try #left-panel
+            const leftPanel = document.querySelector('#left-panel');
+            if (leftPanel) {
+                const li = findInShadow(leftPanel, 0);
+                if (li) { console.log(L, 'Found in left-panel shadow'); return li; }
             }
         }
 
-        // 5. pac-target-input globally (fallback)
+        // 5. Global .pac-target-input
         let inp = document.querySelector('.pac-target-input');
-        if (inp) { console.log(L, 'Found: .pac-target-input (global fallback)'); return inp; }
+        if (inp) { console.log(L, 'Found: .pac-target-input (global)'); return inp; }
 
-        // 6. Any visible input outside our panel (last resort)
+        // 6. Any visible input
         const allInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
         for (const i of allInputs) {
             const vis = (i.offsetParent !== null || i.offsetWidth > 0);

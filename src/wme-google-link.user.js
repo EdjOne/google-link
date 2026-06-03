@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.12.1
+// @version             1.12.2
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -148,6 +148,9 @@
                     const on = chkUnlinked.hasAttribute('checked');
                     on ? chkUnlinked.removeAttribute('checked') : chkUnlinked.setAttribute('checked', '');
                     LS.setShowUnlinkedOnly(!on);
+                    // Highlight/unhighlight on map
+                    if (LS.showUnlinkedOnly()) highlightUnlinked();
+                    else resetHighlights();
                 });
             }
 
@@ -180,6 +183,13 @@
         try { sdk.Events.on({ eventName: 'wme-feature-editor-opened', eventHandler: onSel }); } catch (_) {}
         try { uw.W.selectionManager.events.register('selectionchanged', null, onSel); } catch (_) {}
         setInterval(poll, 1000);
+
+        // Highlight unlinked on map events (zoom, pan)
+        if (LS.showUnlinkedOnly()) {
+            setTimeout(highlightUnlinked, 2000);
+            try { uw.W.map.events.register('zoomend', null, highlightUnlinked); } catch (_) {}
+            try { uw.W.map.events.register('moveend', null, highlightUnlinked); } catch (_) {}
+        }
 
         console.log(L, '=== READY ===');
     }
@@ -299,7 +309,70 @@
         return levenshtein(s1, s2) <= 2;
     }
 
-    // Find "+ Прив'язати до Google" button
+    // --- Highlight unlinked POIs on map (like PlaceNames PLUS) ---
+    function resetHighlights() {
+        // Reset label divs
+        document.querySelectorAll('.map-marker[data-id]').forEach(div => {
+            div.style.color = '';
+            div.style.fontWeight = '';
+            div.style.textShadow = '';
+        });
+        // Reset SVG icon strokes
+        try {
+            const venues = uw.W?.model?.venues;
+            if (!venues) return;
+            const venueLayer = uw.W?.map?.venueLayer;
+            if (!venueLayer) return;
+            for (const mark in venues.objects) {
+                if (venueLayer.featureMap.has(mark)) {
+                    const featGeomId = venueLayer.featureMap.get(mark).geometry.id;
+                    const svgIcon = document.getElementById(featGeomId);
+                    if (svgIcon) {
+                        svgIcon.setAttribute('stroke', 'white');
+                        svgIcon.setAttribute('stroke-width', '2');
+                    }
+                }
+            }
+        } catch (_) {}
+    }
+
+    function highlightUnlinked() {
+        resetHighlights();
+        try {
+            const venues = uw.W?.model?.venues;
+            if (!venues) return;
+            const venueLayer = uw.W?.map?.venueLayer;
+            if (!venueLayer) return;
+            for (const mark in venues.objects) {
+                const venue = venues.getObjectById(mark);
+                if (!venue) continue;
+                const ep = venue.attributes?.externalProviderIDs;
+                if (ep && ep.length > 0) continue; // skip linked
+                const isRH = venue.attributes?.residential;
+                if (isRH) continue; // skip residential (like PlaceNames PLUS)
+
+                // Highlight SVG icon
+                if (venueLayer.featureMap.has(mark)) {
+                    const featGeomId = venueLayer.featureMap.get(mark).geometry.id;
+                    const svgIcon = document.getElementById(featGeomId);
+                    if (svgIcon) {
+                        svgIcon.setAttribute('stroke', '#0ff');
+                        svgIcon.setAttribute('stroke-width', '3');
+                    }
+                }
+
+                // Highlight label div
+                const pointDiv = document.querySelector(`.map-marker[data-id="${mark}"]`);
+                if (pointDiv) {
+                    pointDiv.style.color = '#0ff';
+                    pointDiv.style.fontWeight = 'bold';
+                    pointDiv.style.textShadow = '0 0 4px #0ff';
+                }
+            }
+        } catch (e) { console.warn(L, 'highlightUnlinked failed:', e); }
+    }
+
+    // --- End highlighting ---
     function findLinkBtn() {
         const btn = document.querySelector('wz-button.external-provider-add-new');
         if (btn) return btn;

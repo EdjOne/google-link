@@ -351,7 +351,7 @@
                 const isRH = venue.attributes?.residential;
                 if (isRH) continue; // skip residential (like PlaceNames PLUS)
 
-                // Highlight SVG icon
+                // Highlight SVG icon only (no label text)
                 if (venueLayer.featureMap.has(mark)) {
                     const featGeomId = venueLayer.featureMap.get(mark).geometry.id;
                     const svgIcon = document.getElementById(featGeomId);
@@ -359,14 +359,6 @@
                         svgIcon.setAttribute('stroke', '#0ff');
                         svgIcon.setAttribute('stroke-width', '3');
                     }
-                }
-
-                // Highlight label div
-                const pointDiv = document.querySelector(`.map-marker[data-id="${mark}"]`);
-                if (pointDiv) {
-                    pointDiv.style.color = '#0ff';
-                    pointDiv.style.fontWeight = 'bold';
-                    pointDiv.style.textShadow = '0 0 4px #0ff';
                 }
             }
         } catch (e) { console.warn(L, 'highlightUnlinked failed:', e); }

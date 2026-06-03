@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.8.1
+// @version             1.8.2
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.8.1 loaded =====');
+    console.log('[GL] ===== v1.8.2 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.8.1';
+    b.textContent = 'GL v1.8.2';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -308,27 +308,35 @@
 
     function linkPlace(venue, placeId, d) {
         try {
-            console.log(L, 'Venue full:', JSON.stringify(venue));
+            console.log(L, 'Venue id:', venue.id);
             const existing = venue?.externalProviderIds || [];
             console.log(L, 'Existing providers:', JSON.stringify(existing));
 
             // Check if already linked
-            if (existing.some(ep => ep.id === placeId || ep === placeId)) {
+            if (existing.some(ep => (ep.id || ep) === placeId)) {
                 d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Уже привязано</small>';
                 return;
             }
 
-            // Try different formats for externalProviderIds
             const newProviders = [...existing, { provider: 'google', id: placeId }];
-            console.log(L, 'New providers:', JSON.stringify(newProviders));
+            console.log(L, 'Trying updateVenue...');
 
-            const result = sdk.DataModel.Venues.updateVenue({
-                venueId: venue.id || venue.attributes?.id,
+            sdk.DataModel.Venues.updateVenue({
+                venueId: venue.id,
                 externalProviderIds: newProviders
             });
-            console.log(L, 'Update result:', result);
 
-            d.innerHTML += '<br><small style="color:#34a853;">✅ Привязано! ' + placeId + '</small>';
+            // Re-read venue to check if it worked
+            setTimeout(() => {
+                const v2 = sdk.DataModel.Venues.getById({ venueId: venue.id });
+                console.log(L, 'After update:', JSON.stringify(v2?.externalProviderIds));
+                if (v2?.externalProviderIds?.length > 0) {
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Привязано! ' + placeId + '</small>';
+                } else {
+                    d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Сохранено? Проверь "Внешние сервисы"</small>';
+                }
+            }, 1000);
+
         } catch (e) {
             console.error(L, 'linkPlace error:', e);
             d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>';

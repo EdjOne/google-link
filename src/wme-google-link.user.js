@@ -640,8 +640,8 @@
             const showDist = LS.showDistance();
             let shown = 0;
             for (const res of results) {
-                // Mark protobuf Place IDs (may not work with Waze)
-                const isChIJ = res.place_id?.startsWith('ChIJ');
+                // Skip protobuf Place IDs (cause save errors in Waze)
+                if (!res.place_id?.startsWith('ChIJ')) continue;
 
                 const gHN = extractHouseNum(res.formatted_address || '');
                 const gStreet = extractStreet(res.formatted_address || '');
@@ -690,9 +690,8 @@
                     } catch (_) {}
                 }
 
-                const idLabel = isChIJ ? res.place_id : `<span style="color:#f9a825;">⚠️ ${res.place_id}</span>`;
                 const streetWarn = streetLabel ? `<br><small style="color:#f9a825;">${streetLabel}</small>` : '';
-                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}${streetWarn}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${idLabel}</small>`;
+                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}${streetWarn}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${res.place_id}</small>`;
                 d.onmouseenter = () => d.style.background = '#f0f6ff';
                 d.onmouseleave = () => d.style.background = '#fff';
                 d.onclick = () => {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.8.6
+// @version             1.8.7
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.8.6 loaded =====');
+    console.log('[GL] ===== v1.8.7 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.8.6';
+    b.textContent = 'GL v1.8.7';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -134,51 +134,55 @@
 
     // Find "+ Прив'язати до Google" / "+ Связать с Google" button
     function findLinkBtn() {
-        // 1. Exact selector from WME DOM
+        // 1. Light DOM
         const btn = document.querySelector('wz-button.external-provider-add-new');
-        if (btn) { console.log(L, 'Found button: wz-button.external-provider-add-new'); return btn; }
+        if (btn) { console.log(L, 'Found button: light DOM'); return btn; }
 
-        // 2. Search inside edit-panel shadow DOM
-        const editPanel = document.querySelector('#edit-panel');
-        if (editPanel) {
-            function findInShadow(root, depth) {
-                if (!root || depth > 5) return null;
-                const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
-                let node;
-                while (node = walker.nextNode()) {
-                    if (node.shadowRoot) {
-                        const sr = node.shadowRoot;
-                        const tag = (node.tagName || '').toUpperCase();
-                        if (tag === 'WZ-BUTTON') {
-                            const t = (sr.textContent || '').trim();
-                            const low = t.toLowerCase();
-                            if (low.includes('google') && (low.includes('прив') || low.includes('связ'))) {
-                                console.log(L, 'Found button in shadow:', tag, t);
-                                return node;
-                            }
-                        }
-                        const deep = findInShadow(sr, depth + 1);
-                        if (deep) return deep;
+        // 2. Deep shadow DOM search — find any wz-button with class external-provider-add-new
+        function findInShadow(root, depth) {
+            if (!root || depth > 8) return null;
+            const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+            for (const node of all) {
+                // Check if THIS element is the button
+                if (node.tagName === 'WZ-BUTTON' && node.classList?.contains('external-provider-add-new')) {
+                    console.log(L, 'Found button in shadow (depth ' + depth + ')');
+                    return node;
+                }
+                // Recurse into shadow root
+                if (node.shadowRoot) {
+                    const found = findInShadow(node.shadowRoot, depth + 1);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        // Search from document root
+        const found = findInShadow(document, 0);
+        if (found) return found;
+
+        // 3. Fallback: find any WZ-BUTTON with "Google" text in shadow DOM
+        function findBtnByText(root, depth) {
+            if (!root || depth > 8) return null;
+            const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+            for (const node of all) {
+                if (node.tagName === 'WZ-BUTTON' && node.shadowRoot) {
+                    const t = (node.shadowRoot.textContent || '').trim().toLowerCase();
+                    if (t.includes('google') && (t.includes('прив') || t.includes('связ'))) {
+                        console.log(L, 'Found button by text in shadow:', t.substring(0, 40));
+                        return node;
                     }
                 }
-                return null;
-            }
-            const wzBtn = findInShadow(editPanel, 0);
-            if (wzBtn) return wzBtn;
-        }
-
-        // 3. Fallback: text search in edit-panel
-        if (editPanel) {
-            const all = editPanel.querySelectorAll('*');
-            for (const el of all) {
-                if (el.tagName === 'SCRIPT') continue;
-                const t = (el.textContent || '').trim();
-                if (t.length < 80 && t.toLowerCase().includes('google') && (t.toLowerCase().includes('прив') || t.toLowerCase().includes('связ'))) {
-                    console.log(L, 'Found button via text:', t.substring(0, 50), el.tagName);
-                    return el;
+                if (node.shadowRoot) {
+                    const found = findBtnByText(node.shadowRoot, depth + 1);
+                    if (found) return found;
                 }
             }
+            return null;
         }
+
+        const textBtn = findBtnByText(document, 0);
+        if (textBtn) return textBtn;
 
         console.log(L, 'Button not found');
         return null;

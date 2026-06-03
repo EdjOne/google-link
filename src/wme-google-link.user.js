@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.8.8
+// @version             1.8.9
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.8.8 loaded =====');
+    console.log('[GL] ===== v1.8.9 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.8.8';
+    b.textContent = 'GL v1.8.9';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -324,16 +324,49 @@
             return;
         }
         setTimeout(() => {
+            // 1. Standard Google .pac-container
             const pac = document.querySelector('.pac-container');
             if (pac && pac.style.display !== 'none') {
                 const items = pac.querySelectorAll('.pac-item');
                 if (items.length > 0) {
-                    console.log(L, 'Clicking suggestion:', items[0].textContent);
+                    console.log(L, 'Clicking pac-item:', items[0].textContent);
                     items[0].click();
                     d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>';
                     return;
                 }
             }
+
+            // 2. WME wz-autocomplete dropdown — search in shadow root
+            const ac = document.querySelector('.external-provider-edit-form wz-autocomplete') || document.querySelector('wz-autocomplete');
+            if (ac && ac.shadowRoot) {
+                // Look for list items / options in the dropdown
+                const items = ac.shadowRoot.querySelectorAll('wz-list-item, .option, [role="option"], li');
+                if (items.length > 0) {
+                    console.log(L, 'Clicking autocomplete item:', items[0].textContent?.trim()?.substring(0, 50));
+                    items[0].click();
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово! (autocomplete)</small>';
+                    return;
+                }
+                // Also check for any visible dropdown
+                const dropdown = ac.shadowRoot.querySelector('.dropdown, .suggestions, [class*="list"], [class*="option"]');
+                if (dropdown) {
+                    console.log(L, 'Found dropdown:', dropdown.tagName, dropdown.className);
+                }
+            }
+
+            // 3. Check for any newly appeared list/dropdown near the input
+            const lists = document.querySelectorAll('.pac-container, [role="listbox"], .dropdown-menu, wz-list');
+            for (const list of lists) {
+                const items = list.querySelectorAll('.pac-item, [role="option"], wz-list-item, li');
+                if (items.length > 0) {
+                    console.log(L, 'Clicking list item:', items[0].textContent?.trim()?.substring(0, 50));
+                    items[0].click();
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово! (list)</small>';
+                    return;
+                }
+            }
+
+            if (attempt % 5 === 0) console.log(L, 'Waiting for suggestions... attempt', attempt);
             waitForPac(d, addr, attempt + 1);
         }, 500);
     }

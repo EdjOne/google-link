@@ -515,7 +515,7 @@
                 active.focus();
                 document.execCommand('selectAll', false, null);
                 document.execCommand('insertText', false, addr);
-                console.log(L, 'execCommand done, waiting 2s for dropdown...');
+                console.log(L, 'execCommand done, waiting 1s for dropdown...');
                 setTimeout(() => {
                     const el = document.activeElement;
                     el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
@@ -524,7 +524,7 @@
                     setTimeout(() => {
                         d.innerHTML += '<br><small style="color:#34a853;">✅ Обрано! Перевір та збережи.</small>';
                     }, 500);
-                }, 2000);
+                }, 1000);
             } else {
                 waitAndFill(addr, d, attempt + 1);
             }

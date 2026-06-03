@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.11.0
+// @version             1.11.1
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.11.0 loaded =====');
+    console.log('[GL] ===== v1.11.1 loaded =====');
 
     // --- Enable/Disable toggle ---
     const ENABLED_KEY = 'gl-enabled';
@@ -210,8 +210,16 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }
+    function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
 
-    // Extract house number from Google formatted_address (e.g., "вул. Магістральна, 68Б, Одеса..." → "68б")
+    const STREET_PREFIXES = /^(вул\.|вулиця|ул\.|улица|бульв\.|бульвар|просп\.|проспект|пров\.|провулок|пл\.|площа)\s*/i;
+    function normStreet(s) { return (s || '').replace(STREET_PREFIXES, '').trim().toLowerCase(); }
+
+    function extractStreet(formattedAddr) {
+        const first = (formattedAddr || '').split(',')[0] || '';
+        return first.replace(STREET_PREFIXES, '').trim().toLowerCase();
+    }
+
     function extractHouseNum(formattedAddr) {
         const parts = formattedAddr.split(',').map(s => s.trim());
         for (const part of parts) {
@@ -441,6 +449,7 @@
         const loc = ll(vid);
         const radius = LS.maxRadius();
         const poiHN = hn(vid).toLowerCase();
+        const poiStreet = normStreet(st(vid));
         const opts = { query: query };
         if (loc) { try { opts.location = new google.maps.LatLng(loc.lat, loc.lng); opts.radius = radius; } catch (_) {} }
 
@@ -454,15 +463,22 @@
             const showDist = LS.showDistance();
             let shown = 0;
             for (const res of results) {
-                // Filter: if POI has house number, skip Google results without one
                 const gHN = extractHouseNum(res.formatted_address || '');
+                const gStreet = extractStreet(res.formatted_address || '');
+
+                // Skip if POI has house number but Google result doesn't
                 if (poiHN && !gHN) {
-                    console.log(L, 'Skip (no house number):', res.name, '—', res.formatted_address);
+                    console.log(L, 'Skip (no house number):', res.name);
                     continue;
                 }
-                // Also skip if numbers don't match exactly
+                // Skip if house number doesn't match
                 if (poiHN && gHN && gHN !== poiHN) {
-                    console.log(L, 'Skip (number mismatch):', res.name, '—', gHN, '≠', poiHN);
+                    console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN);
+                    continue;
+                }
+                // Skip if POI has street but Google street doesn't match
+                if (poiStreet && gStreet && gStreet !== poiStreet) {
+                    console.log(L, 'Skip (street mismatch):', gStreet, '≠', poiStreet);
                     continue;
                 }
 
@@ -496,7 +512,7 @@
                 shown++;
             }
             if (shown === 0) {
-                r.innerHTML = '<div style="color:#999;">Нет совпадений' + (poiHN ? ' (номер дома: ' + poiHN + ')' : '') + '</div>';
+                r.innerHTML = '<div style="color:#999;">Нет совпадений' + (poiStreet || poiHN ? ' — ' + (poiStreet ? '«' + poiStreet + '»' : '') + (poiHN ? ', №' + poiHN : '') : '') + '</div>';
             }
         });
     }

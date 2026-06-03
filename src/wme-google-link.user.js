@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.8.4
+// @version             1.8.5
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.8.4 loaded =====');
+    console.log('[GL] ===== v1.8.5 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.8.4';
+    b.textContent = 'GL v1.8.5';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -245,17 +245,31 @@
         return null;
     }
 
-    // Async wait-and-fill (non-blocking, called from sync onclick)
+    // Async wait-and-fill — type into whatever element has focus after button click
     function waitAndFill(addr, d, attempt) {
-        if (attempt > 30) {
-            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Input не появился. Вставь вручную.</small>';
+        if (attempt > 20) {
+            d.innerHTML += '<br><small style="color:#f9a825;">⚠️ Поле не появилось. Вставь вручную: ' + addr + '</small>';
             navigator.clipboard.writeText(addr);
             return;
         }
         setTimeout(() => {
-            const input = findInput();
-            if (input) {
-                console.log(L, 'Input found:', input.tagName, 'filling char-by-char...');
+            // Try to find the input in multiple ways
+            let input = null;
+
+            // 1. Try focused element (button click should focus the input)
+            const active = document.activeElement;
+            if (active && active !== document.body && active !== d) {
+                if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') {
+                    input = active;
+                    console.log(L, 'Using activeElement:', active.tagName, active.placeholder || '');
+                }
+            }
+
+            // 2. Try findInput()
+            if (!input) input = findInput();
+
+            if (input && input.tagName === 'INPUT') {
+                console.log(L, 'Input found:', input.tagName, 'filling...');
                 d.innerHTML += '<br><small style="color:#4285f4;">⏳ Заполняю...</small>';
                 input.focus();
                 input.click();
@@ -280,6 +294,8 @@
                 };
                 typeChar();
             } else {
+                // No input found yet, retry
+                if (attempt % 5 === 0) console.log(L, 'Waiting for input... attempt', attempt);
                 waitAndFill(addr, d, attempt + 1);
             }
         }, 300);
@@ -310,21 +326,39 @@
         try {
             console.log(L, 'linkPlace:', placeId, addr);
 
-            // Click the "Связать с Google" button
-            const btn = findLinkBtn();
-            if (!btn) {
-                d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка не найдена</small>';
-                return;
+            // Step 1: Try to expand "Внешние сервисы" section first
+            const expandBtn = document.querySelector('.external-providers-control .panel-title, .external-providers-control summary, .external-providers-control [data-toggle]');
+            if (expandBtn) {
+                console.log(L, 'Expanding external providers section...');
+                expandBtn.click();
             }
-            console.log(L, 'Clicking button...');
-            btn.click();
 
-            // Wait for the autocomplete to appear, then type the address
-            waitAndFill(addr, d, 0);
+            // Step 2: Find and click the button (with retries)
+            findBtnWithRetry(addr, d, 0);
         } catch (e) {
             console.error(L, 'linkPlace error:', e);
             d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>';
         }
+    }
+
+    function findBtnWithRetry(addr, d, attempt) {
+        if (attempt > 10) {
+            d.innerHTML += '<br><small style="color:#ea4335;">❌ Кнопка не найдена. Открой «Внешние сервисы» вручную.</small>';
+            return;
+        }
+        setTimeout(() => {
+            const btn = findLinkBtn();
+            if (btn) {
+                console.log(L, 'Button found, clicking...');
+                d.innerHTML += '<br><small style="color:#4285f4;">⏳ Открываю поиск...</small>';
+                btn.click();
+                // Wait for autocomplete to appear
+                waitAndFill(addr, d, 0);
+            } else {
+                console.log(L, 'Button not found, retry', attempt);
+                findBtnWithRetry(addr, d, attempt + 1);
+            }
+        }, attempt === 0 ? 500 : 300);
     }
 
     async function show(vid) {

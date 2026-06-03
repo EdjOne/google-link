@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.11.4
+// @version             1.11.5
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.11.4 loaded =====');
+    console.log('[GL] ===== v1.11.5 loaded =====');
 
     // --- Enable/Disable toggle ---
     const ENABLED_KEY = 'gl-enabled';
@@ -225,7 +225,11 @@
 
     function extractStreet(formattedAddr) {
         const first = (formattedAddr || '').split(',')[0] || '';
-        return first.replace(STREET_PREFIXES, '').trim().toLowerCase();
+        return first
+            .replace(STREET_PREFIXES, '')      // remove prefix: "вул. "
+            .replace(/\s+(вулиця|вул\.|улица|ул\.|бульвар|бульв\.|проспект|просп\.|провулок|пров\.|площа|пл\.)$/i, '') // remove suffix
+            .trim()
+            .toLowerCase();
     }
 
     function extractHouseNum(formattedAddr) {

@@ -19,8 +19,7 @@
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
     let enabled = localStorage.getItem(ENABLED_KEY) !== 'false';
-
-    if (!enabled) { console.log('[GL] Disabled'); return; }
+    // NOTE: no early return — sidebar tab must always render so user can re-enable
 
     // --- Settings (localStorage) ---
     const LS = {
@@ -106,15 +105,44 @@
                 <div style="padding:10px;">
                     <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.12.3</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-                        <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''}>📍 Відстань</wz-checkbox>
-                        <wz-checkbox id="gl-chk-unlinked" ${showUnlinked ? 'checked' : ''}>🔗 Тільки без посилань</wz-checkbox>
+                        <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
+                        <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
+                        <wz-checkbox id="gl-chk-unlinked" ${showUnlinked ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>🔗 Тільки без посилань</wz-checkbox>
                         <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
-                            Радіус: <input id="gl-radius" type="number" min="100" max="50000" step="100" value="${radius}" style="width:65px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" /> м
+                            Радіус: <input id="gl-radius" type="number" min="100" max="50000" step="100" value="${radius}" ${!enabled ? 'disabled' : ''} style="width:65px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" /> м
                         </span>
                     </div>
-                    <div style="font-size:12px;color:#888;">Обери POI на карті для пошуку</div>
+                    <div style="font-size:12px;color:#888;">${enabled ? 'Обери POI на карті для пошуку' : 'Скрипт вимкнено'}</div>
                 </div>
             `;
+
+            // Checkbox: enable/disable script
+            const chkEnabled = tabPane.querySelector('#gl-chk-enabled');
+            if (chkEnabled) {
+                chkEnabled.addEventListener('click', () => {
+                    const on = chkEnabled.hasAttribute('checked');
+                    on ? chkEnabled.removeAttribute('checked') : chkEnabled.setAttribute('checked', '');
+                    enabled = !on;
+                    localStorage.setItem(ENABLED_KEY, String(enabled));
+                    // Enable/disable other controls
+                    const chkD = tabPane.querySelector('#gl-chk-dist');
+                    const chkU = tabPane.querySelector('#gl-chk-unlinked');
+                    const rIn = tabPane.querySelector('#gl-radius');
+                    const hint = tabPane.querySelector('div[style*="color:#888"]');
+                    if (chkD) chkD.disabled = !enabled;
+                    if (chkU) chkU.disabled = !enabled;
+                    if (rIn) rIn.disabled = !enabled;
+                    if (hint) hint.textContent = enabled ? 'Обери POI на карті для пошуку' : 'Скрипт вимкнено';
+                    if (enabled) {
+                        console.log(L, 'Enabled');
+                        if (LS.showUnlinkedOnly()) highlightUnlinked();
+                    } else {
+                        console.log(L, 'Disabled');
+                        resetHighlights();
+                        const p = document.getElementById('gl-p'); if (p) p.remove();
+                    }
+                });
+            }
 
             // Checkbox: show distance
             const chkDist = tabPane.querySelector('#gl-chk-dist');
@@ -171,6 +199,7 @@
 
         // Highlight unlinked on map events (zoom, pan, save) — always register, check checkbox at call time
         function applyHighlightsIfNeeded() {
+            if (!enabled) return;
             if (LS.showUnlinkedOnly()) highlightUnlinked();
             else resetHighlights();
         }
@@ -224,8 +253,9 @@
         return null;
     }
 
-    function onSel() { setTimeout(poll, 200); }
+    function onSel() { if (enabled) setTimeout(poll, 200); }
     function poll() {
+        if (!enabled) return;
         const vid = getVid();
         if (vid && vid !== lastVid) {
             lastVid = vid;

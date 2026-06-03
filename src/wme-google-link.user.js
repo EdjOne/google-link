@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.9.0
+// @version             1.9.1
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.9.0 loaded =====');
+    console.log('[GL] ===== v1.9.1 loaded =====');
 
     // Force ALL shadow roots to be open — must run BEFORE any web components
     // At document-start, document.head may not exist yet, so use MutationObserver
@@ -49,7 +49,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.9.0';
+    b.textContent = 'GL v1.9.1';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -308,24 +308,19 @@
                 active.focus();
                 document.execCommand('selectAll', false, null);
                 document.execCommand('insertText', false, addr);
-                console.log(L, 'execCommand done, sending ArrowDown+Enter...');
+                console.log(L, 'execCommand done, waiting for dropdown...');
 
-                // Wait for dropdown to appear, then select first item via keyboard
+                // Wait for dropdown to appear, then select first item via Enter
                 setTimeout(() => {
                     const el = document.activeElement;
-                    // Send ArrowDown to open/navigate dropdown
-                    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
-
-                    // Wait a bit then send Enter to select
-                    setTimeout(() => {
-                        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                        el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                        el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                        console.log(L, 'ArrowDown+Enter sent');
-                        d.innerHTML += '<br><small style="color:#34a853;">✅ Выбрано! Проверь и сохрани.</small>';
-                    }, 500);
-                }, 1000);
+                    console.log(L, 'Active element:', el?.tagName, 'sending Enter...');
+                    // The first item should already be highlighted when dropdown opens
+                    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                    el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                    console.log(L, 'Enter sent');
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Выбрано! Проверь и сохрани.</small>';
+                }, 2000);
             } else {
                 if (attempt % 5 === 0) console.log(L, 'Waiting... attempt', attempt, 'active:', active?.tagName || 'none');
                 waitAndFill(addr, d, attempt + 1);

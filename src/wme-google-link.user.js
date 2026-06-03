@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.11.2
+// @version             1.11.3
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.11.2 loaded =====');
+    console.log('[GL] ===== v1.11.3 loaded =====');
 
     // --- Enable/Disable toggle ---
     const ENABLED_KEY = 'gl-enabled';
@@ -171,14 +171,22 @@
     }
 
     function getVid() {
+        // SDK API — only venue (POI), NOT place/RPP
         try {
             const s = sdk?.Editing?.getSelection?.();
-            const t = String(s?.objectType || '').toLowerCase();
-            if (s?.ids?.length === 1 && (t === 'venue' || t.endsWith('venue'))) return String(s.ids[0]);
+            if (s?.ids?.length === 1) {
+                const t = String(s?.objectType || '').toLowerCase();
+                if (t === 'venue') return String(s.ids[0]);
+            }
         } catch (_) {}
+        // Legacy API — only type === 'venue'
         try {
             const f = uw.W?.selectionManager?.getSelectedFeatures?.();
-            if (f?.length === 1 && f[0]?.model?.type === 'venue') return String(f[0].model.attributes?.id);
+            if (f?.length === 1) {
+                const t = f[0]?.model?.type;
+                const attrs = f[0]?.model?.attributes;
+                if (t === 'venue' && !attrs?.isPlaceholder) return String(attrs?.id);
+            }
         } catch (_) {}
         return null;
     }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.7.17
+// @version             1.7.18
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.7.17 loaded =====');
+    console.log('[GL] ===== v1.7.18 loaded =====');
 
     // Force ALL shadow roots to be open (so we can search inside them)
     const _origAttachShadow = Element.prototype.attachShadow;
@@ -26,7 +26,7 @@
 
     // Badge
     const b = document.createElement('div');
-    b.textContent = 'GL v1.7.17';
+    b.textContent = 'GL v1.7.18';
     b.style.cssText = 'position:fixed;bottom:5px;right:5px;background:#4285f4;color:#fff;padding:3px 8px;border-radius:4px;font:bold 12px Arial;z-index:99999;';
     document.body.appendChild(b);
 
@@ -109,192 +109,101 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
 
-    // Find "+ Прив'язати до Google" / "+ Связать с Google" button — language-agnostic
+    // Find "+ Прив'язати до Google" / "+ Связать с Google" button
     function findLinkBtn() {
-        const panel = document.querySelector('#edit-panel') || document.body;
+        // 1. Exact selector from WME DOM
+        const btn = document.querySelector('wz-button.external-provider-add-new');
+        if (btn) { console.log(L, 'Found button: wz-button.external-provider-add-new'); return btn; }
 
-        // Helper: does text look like the link-to-google button?
-        function isGoogleBtn(text) {
-            const low = text.toLowerCase();
-            return low.includes('google') && (low.includes('прив') || low.includes('связ'));
+        // 2. Search inside edit-panel shadow DOM
+        const editPanel = document.querySelector('#edit-panel');
+        if (editPanel) {
+            function findInShadow(root, depth) {
+                if (!root || depth > 5) return null;
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+                let node;
+                while (node = walker.nextNode()) {
+                    if (node.shadowRoot) {
+                        const sr = node.shadowRoot;
+                        const tag = (node.tagName || '').toUpperCase();
+                        if (tag === 'WZ-BUTTON') {
+                            const t = (sr.textContent || '').trim();
+                            const low = t.toLowerCase();
+                            if (low.includes('google') && (low.includes('прив') || low.includes('связ'))) {
+                                console.log(L, 'Found button in shadow:', tag, t);
+                                return node;
+                            }
+                        }
+                        const deep = findInShadow(sr, depth + 1);
+                        if (deep) return deep;
+                    }
+                }
+                return null;
+            }
+            const wzBtn = findInShadow(editPanel, 0);
+            if (wzBtn) return wzBtn;
         }
 
-        // 1. XPath: search for either Ukrainian or Russian text
-        for (const xpath of [
-            '//*[contains(text(),"Прив") and contains(text(),"Google")]',
-            '//*[contains(text(),"Связ") and contains(text(),"Google")]'
-        ]) {
-            const xp = document.evaluate(xpath, panel, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-            for (let i = 0; i < xp.snapshotLength; i++) {
-                const el = xp.snapshotItem(i);
+        // 3. Fallback: text search in edit-panel
+        if (editPanel) {
+            const all = editPanel.querySelectorAll('*');
+            for (const el of all) {
+                if (el.tagName === 'SCRIPT') continue;
                 const t = (el.textContent || '').trim();
-                if (t.length < 80 && el.tagName !== 'SCRIPT') {
-                    console.log(L, 'XPath match:', t.substring(0, 50), el.tagName);
+                if (t.length < 80 && t.toLowerCase().includes('google') && (t.toLowerCase().includes('прив') || t.toLowerCase().includes('связ'))) {
+                    console.log(L, 'Found button via text:', t.substring(0, 50), el.tagName);
                     return el;
                 }
             }
         }
 
-        // 2. Prefer WZ-BUTTON elements with Google text (shadow DOM)
-        function findInShadow(root, depth) {
-            if (!root || depth > 5) return null;
-            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
-            let node;
-            while (node = walker.nextNode()) {
-                if (node.shadowRoot) {
-                    const sr = node.shadowRoot;
-                    if (node.tagName && node.tagName.includes('-')) {
-                        const t = (sr.textContent || '').trim();
-                        if (isGoogleBtn(t) && t.length < 80) {
-                            console.log(L, 'Found WZ button in shadow:', node.tagName, t);
-                            return node;
-                        }
-                    }
-                    const deep = findInShadow(sr, depth + 1);
-                    if (deep) return deep;
-                }
-            }
-            return null;
-        }
-
-        const wzBtn = findInShadow(panel, 0);
-        if (wzBtn) return wzBtn;
-
-        // 3. Walk ALL elements, check direct text nodes
-        const all = panel.querySelectorAll('*');
-        for (const el of all) {
-            if (el.tagName === 'SCRIPT') continue;
-            const own = Array.from(el.childNodes)
-                .filter(n => n.nodeType === 3)
-                .map(n => n.textContent.trim()).join(' ');
-            if (own.length < 60 && isGoogleBtn(own)) {
-                console.log(L, 'Direct text:', own, el.tagName);
-                return el;
-            }
-        }
-
-        // 4. Full text match on short elements
-        for (const el of all) {
-            if (el.tagName === 'SCRIPT') continue;
-            const t = (el.textContent || '').trim();
-            if (t.length > 80) continue;
-            if (isGoogleBtn(t)) {
-                console.log(L, 'Full text match:', t.substring(0, 50), el.tagName);
-                return el;
-            }
-        }
-
-        // 5. Debug: dump all text that contains "Google"
-        console.log(L, '--- Elements with "Google" text ---');
-        for (const el of all) {
-            if (el.tagName === 'SCRIPT') continue;
-            const t = (el.textContent || '').trim();
-            if (t.length < 100 && t.toLowerCase().includes('google')) {
-                console.log(L, '  >', t.substring(0, 60), '|', el.tagName, '| children:', el.children.length);
-            }
-        }
-
+        console.log(L, 'Button not found');
         return null;
     }
 
-    // Find Google autocomplete input — "Искать POI" in External Services section
+    // Find Google autocomplete input — exact WME DOM structure
     function findInput() {
-        const editPanel = document.querySelector('#edit-panel');
-
-        // Helper: deeply search for <input> in all shadow roots
-        function findInShadow(root, depth) {
-            if (!root || depth > 5) return null;
-            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
-            let node;
-            while (node = walker.nextNode()) {
-                if (node.shadowRoot) {
-                    const sr = node.shadowRoot;
-                    const tag = (node.tagName || '').toUpperCase();
-
-                    // Skip WZ-TEXT-INPUT (that's "Введите название" — POI name field)
-                    // Skip WZ-CAPTION, WZ-MENU, etc.
-                    const skipTags = ['WZ-TEXT-INPUT', 'WZ-CAPTION', 'WZ-MENU', 'WZ-MENU-TITLE', 'WZ-BODY2', 'WZ-LIST-ITEM'];
-                    if (skipTags.includes(tag)) {
-                        const deep = findInShadow(sr, depth + 1);
-                        if (deep) return deep;
-                        continue;
+        // 1. Exact path: wz-autocomplete inside .external-provider-edit-form
+        const form = document.querySelector('.external-provider-edit-form');
+        if (form) {
+            const ac = form.querySelector('wz-autocomplete');
+            if (ac) {
+                // The actual <input> is inside wz-autocomplete's shadow root
+                if (ac.shadowRoot) {
+                    const inp = ac.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                    if (inp) {
+                        console.log(L, 'Found: input in wz-autocomplete shadow root');
+                        return inp;
                     }
-
-                    const candidates = sr.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"]), textarea, [contenteditable="true"]');
-                    for (const el of candidates) {
-                        const vis = (el.offsetParent !== null || el.offsetWidth > 0);
-                        if (vis) {
-                            console.log(L, 'Found in shadow (depth ' + depth + '):', tag, el.placeholder || el.getAttribute('aria-label') || '');
-                            return el;
-                        }
-                    }
-                    const deep = findInShadow(sr, depth + 1);
-                    if (deep) return deep;
                 }
+                // Fallback: the wz-autocomplete itself might be focusable
+                console.log(L, 'Found: wz-autocomplete (no shadow input)');
+                return ac;
             }
-            return null;
         }
 
-        // 1. Global .pac-target-input (Google autocomplete creates this)
+        // 2. Search inside edit-panel for wz-autocomplete in shadow DOM
+        const editPanel = document.querySelector('#edit-panel');
+        if (editPanel) {
+            const walker = document.createTreeWalker(editPanel, NodeFilter.SHOW_ELEMENT, null);
+            let node;
+            while (node = walker.nextNode()) {
+                if (node.shadowRoot && node.tagName === 'WZ-AUTOCOMPLETE') {
+                    const sr = node.shadowRoot;
+                    const inp = sr.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
+                    if (inp && (inp.offsetParent !== null || inp.offsetWidth > 0)) {
+                        console.log(L, 'Found: input in WZ-AUTOCOMPLETE via tree walk');
+                        return inp;
+                    }
+                }
+            }
+        }
+
+        // 3. Global .pac-target-input (Google autocomplete creates this)
         let gpac = document.querySelector('.pac-target-input');
         if (gpac) { console.log(L, 'Found: .pac-target-input (global)'); return gpac; }
 
-        if (editPanel) {
-            // 2. pac-target-input inside edit-panel
-            let inp = editPanel.querySelector('.pac-target-input');
-            if (inp) { console.log(L, 'Found: .pac-target-input in edit-panel'); return inp; }
-
-            // 3. Shadow DOM search
-            console.log(L, 'Searching shadow DOM in edit-panel...');
-            const si = findInShadow(editPanel, 0);
-            if (si) return si;
-
-            // 4. elementsFromPoint: probe bottom of edit-panel (where "Искать POI" lives)
-            const rect = editPanel.getBoundingClientRect();
-            // "Искать POI" is at the very bottom of the visible panel
-            const probeY = rect.bottom - 20;
-            const probeX = rect.left + rect.width / 2;
-            console.log(L, 'Probing at:', Math.round(probeX), Math.round(probeY));
-            const elems = document.elementsFromPoint(probeX, probeY);
-            for (const el of elems) {
-                // Check if this element IS an input
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                    console.log(L, 'Found via elementsFromPoint:', el.tagName, el.placeholder || el.name || '');
-                    return el;
-                }
-                // Check if this element CONTAINS an input (for web component host elements)
-                if (el.shadowRoot) {
-                    const si = el.shadowRoot.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                    if (si) {
-                        console.log(L, 'Found via elementsFromPoint shadow:', el.tagName, si.placeholder || si.name || '');
-                        return si;
-                    }
-                }
-                // Check direct children
-                const inner = el.querySelector && el.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="number"])');
-                if (inner) {
-                    console.log(L, 'Found via elementsFromPoint child:', el.tagName, inner.placeholder || inner.name || '');
-                    return inner;
-                }
-            }
-
-            // 5. Fallback: last visible input in light DOM
-            const panelInputs = editPanel.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]):not([type="number"])');
-            let lastVisible = null;
-            for (const i of panelInputs) {
-                const vis = (i.offsetParent !== null || i.offsetWidth > 0);
-                const inOurPanel = i.closest('#gl-p');
-                if (vis && !inOurPanel) {
-                    lastVisible = i;
-                }
-            }
-            if (lastVisible) {
-                console.log(L, 'Fallback last input:', lastVisible.placeholder || lastVisible.name || '');
-                return lastVisible;
-            }
-        }
-
-        console.log(L, 'No input found anywhere');
+        console.log(L, 'No input found');
         return null;
     }
 

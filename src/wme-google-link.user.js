@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.14.2
+// @version             1.14.3
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.14.2 loaded =====');
+    console.log('[GL] ===== v1.14.3 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -103,7 +103,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.14.2</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.14.3</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -291,6 +291,45 @@
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }
     function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
+
+    // --- Get alternative (old) street names from the segment assigned to this venue ---
+    function getAltStreets(vid) {
+        const alts = [];
+        try {
+            const streetId = sdk?.DataModel?.Venues?.getAddress?.({ venueId: vid })?.street?.id;
+            if (!streetId) return alts;
+            console.log(L, 'Alt streets: streetId =', streetId);
+            // SDK fallback — check street object for altNames
+            try {
+                const sdkStreet = sdk?.DataModel?.Streets?.getById?.({ streetId: String(streetId) });
+                console.log(L, 'Alt streets: sdkStreet =', sdkStreet);
+                const an = sdkStreet?.altNames || sdkStreet?.attributes?.altNames;
+                if (Array.isArray(an)) {
+                    for (const n of an) {
+                        const name = typeof n === 'string' ? n : n?.name || n?.primary || '';
+                        if (name && !alts.includes(name)) alts.push(name);
+                    }
+                }
+            } catch (_) {}
+            // Legacy fallback — W.model.streets
+            if (!alts.length) {
+                try {
+                    const ls = uw.W?.model?.streets?.getObjectById?.(streetId);
+                    console.log(L, 'Alt streets: legacy street =', ls?.attributes);
+                    const la = ls?.attributes;
+                    const an = la?.altNames || la?.alternativeNames || la?.names;
+                    if (Array.isArray(an)) {
+                        for (const n of an) {
+                            const name = typeof n === 'string' ? n : n?.name || n?.primary || '';
+                            if (name && !alts.includes(name)) alts.push(name);
+                        }
+                    }
+                } catch (_) {}
+            }
+        } catch (_) {}
+        console.log(L, 'Alt streets found:', alts.length, alts);
+        return alts;
+    }
 
     const STREET_PREFIXES = /^(вул\.|вулиця|ул\.|улица|бульв\.|бульвар|просп\.|проспект|пров\.|провулок|пл\.|площа)\s*/i;
     const STREET_SUFFIXES = /\s+(вулиця|вул\.|улица|ул\.|бульвар|бульв\.|проспект|просп\.|провулок|пров\.|площа|пл\.)$/i;
@@ -628,10 +667,59 @@
         }, attempt === 0 ? 500 : 300);
     }
 
-    async function show(vid) {
-        // Remove old floating panel
-        const old = document.getElementById('gl-p'); if (old) old.remove();
+    // --- Display search results in the panel ---
+    function showResults(vid, results, status, rEl, poiStreet, poiHN, loc, radius) {
+        if (status !== 'OK' || !results?.length) return false;
+        rEl.innerHTML = '';
+        const showDist = LS.showDistance();
+        let shown = 0;
+        for (const res of results) {
+            if (!res.place_id?.startsWith('ChIJ')) continue;
+            const gHN = extractHouseNum(res.formatted_address || '');
+            const gStreet = extractStreet(res.formatted_address || '');
+            if (loc && res.geometry?.location) {
+                try {
+                    const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
+                    if (dist > radius) { console.log(L, 'Skip (too far):', res.name, '—', fmtDist(dist)); continue; }
+                } catch (_) {}
+            }
+            if (poiHN && !gHN) { console.log(L, 'Skip (no house number):', res.name); continue; }
+            if (poiHN && gHN && gHN !== poiHN) { console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN); continue; }
+            let streetLabel = '';
+            if (poiStreet && gStreet) {
+                if (!streetMatch(poiStreet, gStreet)) streetLabel = '⚠️ ' + gStreet;
+            } else if (poiStreet && !gStreet) {
+                streetLabel = '⚠️ ?';
+            }
+            const d = document.createElement('div');
+            d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;';
+            let distHtml = '';
+            if (showDist && loc && res.geometry?.location) {
+                try {
+                    const rl = res.geometry.location;
+                    const dist = haversine(loc.lat, loc.lng, rl.lat(), rl.lng());
+                    const color = dist < 50 ? '#34a853' : dist < 300 ? '#f9a825' : '#ea4335';
+                    distHtml = `<br><small style="color:${color};">📍 ${fmtDist(dist)}</small>`;
+                } catch (_) {}
+            }
+            const streetWarn = streetLabel ? `<br><small style="color:#f9a825;">${streetLabel}</small>` : '';
+            d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}${streetWarn}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${res.place_id}</small>`;
+            d.onmouseenter = () => d.style.background = '#f0f6ff';
+            d.onmouseleave = () => d.style.background = '#fff';
+            d.onclick = () => {
+                try {
+                    d.style.background = '#e8f0fe';
+                    linkPlace(res.formatted_address || res.name || '', res.place_id, d);
+                } catch (e) { d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>'; }
+            };
+            rEl.appendChild(d);
+            shown++;
+        }
+        return shown > 0;
+    }
 
+    async function show(vid) {
+        const old = document.getElementById('gl-p'); if (old) old.remove();
         const query = q(vid);
         if (!query) return;
 
@@ -671,89 +759,47 @@
         const radius = LS.maxRadius();
         const poiHN = hn(vid).toLowerCase();
         const poiStreet = normStreet(st(vid));
-        const opts = { query: query };
-        if (loc) { try { opts.location = new google.maps.LatLng(loc.lat, loc.lng); opts.radius = radius; } catch (_) {} }
+        const altStreets = getAltStreets(vid);
+        const rEl = document.getElementById('gl-r');
 
-        ps.textSearch(opts, (results, status) => {
-            console.log(L, 'Results:', status, results?.length || 0);
-            const r = document.getElementById('gl-r');
-            if (!r) return;
-            if (status !== 'OK' || !results?.length) { r.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>'; return; }
-            r.innerHTML = '';
+        function makeOpts(streetOverride) {
+            const q2 = streetOverride
+                ? [streetOverride, ...query.split(',').slice(1)].join(', ')
+                : query;
+            const o = { query: q2 };
+            if (loc) { try { o.location = new google.maps.LatLng(loc.lat, loc.lng); o.radius = radius; } catch (_) {} }
+            return o;
+        }
 
-            const showDist = LS.showDistance();
-            let shown = 0;
-            for (const res of results) {
-                // Skip protobuf Place IDs (cause save errors in Waze)
-                if (!res.place_id?.startsWith('ChIJ')) continue;
+        // 1) Search with main street
+        ps.textSearch(makeOpts(null), (results, status) => {
+            console.log(L, 'Main search:', status, results?.length || 0);
+            if (!document.getElementById('gl-r')) return;
+            if (showResults(vid, results, status, rEl, poiStreet, poiHN, loc, radius)) return;
 
-                const gHN = extractHouseNum(res.formatted_address || '');
-                const gStreet = extractStreet(res.formatted_address || '');
-
-                // Skip if too far from POI
-                if (loc && res.geometry?.location) {
-                    try {
-                        const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
-                        if (dist > radius) {
-                            console.log(L, 'Skip (too far):', res.name, '—', fmtDist(dist));
-                            continue;
-                        }
-                    } catch (_) {}
-                }
-
-                // Skip if POI has house number but Google result doesn't
-                if (poiHN && !gHN) {
-                    console.log(L, 'Skip (no house number):', res.name);
-                    continue;
-                }
-                // Skip if house number doesn't match
-                if (poiHN && gHN && gHN !== poiHN) {
-                    console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN);
-                    continue;
-                }
-                // Street match: exact, fuzzy, or mark as mismatch
-                let streetLabel = '';
-                if (poiStreet && gStreet) {
-                    if (!streetMatch(poiStreet, gStreet)) {
-                        streetLabel = '⚠️ ' + gStreet;
-                    }
-                } else if (poiStreet && !gStreet) {
-                    streetLabel = '⚠️ ?';
-                }
-
-                const d = document.createElement('div');
-                d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;';
-
-                let distHtml = '';
-                if (showDist && loc && res.geometry?.location) {
-                    try {
-                        const rl = res.geometry.location;
-                        const dist = haversine(loc.lat, loc.lng, rl.lat(), rl.lng());
-                        const color = dist < 50 ? '#34a853' : dist < 300 ? '#f9a825' : '#ea4335';
-                        distHtml = `<br><small style="color:${color};">📍 ${fmtDist(dist)}</small>`;
-                    } catch (_) {}
-                }
-
-                const streetWarn = streetLabel ? `<br><small style="color:#f9a825;">${streetLabel}</small>` : '';
-                d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}${streetWarn}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${res.place_id}</small>`;
-                d.onmouseenter = () => d.style.background = '#f0f6ff';
-                d.onmouseleave = () => d.style.background = '#fff';
-                d.onclick = () => {
-                    try {
-                        const placeId = res.place_id;
-                        const addr = res.formatted_address || res.name || '';
-                        d.style.background = '#e8f0fe';
-                        linkPlace(addr, placeId, d);
-                    } catch (e) {
-                        d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>';
-                    }
-                };
-                r.appendChild(d);
-                shown++;
+            // 2) No results — try alternative (old) street names
+            if (!altStreets.length) {
+                rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
+                return;
             }
-            if (shown === 0) {
-                r.innerHTML = '<div style="color:#999;">Немає збігів' + (poiStreet || poiHN ? ' — ' + (poiStreet ? '«' + poiStreet + '»' : '') + (poiHN ? ', №' + poiHN : '') : '') + '</div>';
+            console.log(L, 'Trying', altStreets.length, 'alt street(s):', altStreets);
+            rEl.innerHTML = '<div style="color:#666;">⏳ Спроба за альтернативною назвою...</div>';
+            let ai = 0;
+            function tryAlt() {
+                if (ai >= altStreets.length) {
+                    rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
+                    return;
+                }
+                const altQ = altStreets[ai];
+                console.log(L, 'Alt search:', altQ);
+                ps.textSearch(makeOpts(altQ), (res2, st2) => {
+                    if (!document.getElementById('gl-r')) return;
+                    if (showResults(vid, res2, st2, rEl, normStreet(altQ), poiHN, loc, radius)) return;
+                    ai++;
+                    tryAlt();
+                });
             }
+            tryAlt();
         });
     }
 

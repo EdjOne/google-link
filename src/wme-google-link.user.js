@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.14.1
+// @version             1.14.2
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -14,7 +14,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.14.1 loaded =====');
+    console.log('[GL] ===== v1.14.2 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -103,7 +103,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.14.1</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.14.2</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -402,6 +402,27 @@
         } catch (e) { console.warn(L, 'highlightUnlinked failed:', e); }
     }
 
+    // --- Remove highlight from a specific venue after linking ---
+    function unhighlightVenue(vid) {
+        try {
+            const venueLayer = uw.W?.map?.venueLayer;
+            if (venueLayer && venueLayer.featureMap.has(vid)) {
+                const featGeomId = venueLayer.featureMap.get(vid).geometry.id;
+                const svgIcon = document.getElementById(featGeomId);
+                if (svgIcon) {
+                    svgIcon.setAttribute('stroke', 'white');
+                    svgIcon.setAttribute('stroke-width', '2');
+                }
+            }
+            const pointDiv = document.querySelector('.map-marker[data-id="' + vid + '"]');
+            if (pointDiv) {
+                pointDiv.style.color = '';
+                pointDiv.style.fontWeight = '';
+                pointDiv.style.textShadow = '';
+            }
+        } catch (_) {}
+    }
+
     // --- End highlighting ---
     function findLinkBtn() {
         const btn = document.querySelector('wz-button.external-provider-add-new');
@@ -523,6 +544,11 @@
                     console.log(L, 'Enter sent');
                     setTimeout(() => {
                         d.innerHTML += '<br><small style="color:#34a853;">✅ Обрано! Перевір та збережи.</small>';
+                        try {
+                            const sel = sdk?.Editing?.getSelection?.();
+                            if (sel?.ids?.length === 1) unhighlightVenue(String(sel.ids[0]));
+                        } catch (_) {}
+                        lastVid = null;
                     }, 300);
                 }, 520);
             } else {
@@ -541,17 +567,35 @@
             const pac = document.querySelector('.pac-container');
             if (pac && pac.style.display !== 'none') {
                 const items = pac.querySelectorAll('.pac-item');
-                if (items.length > 0) { items[0].click(); d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>'; return; }
+                if (items.length > 0) {
+                    items[0].click();
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>';
+                    try { const sel = sdk?.Editing?.getSelection?.(); if (sel?.ids?.length === 1) unhighlightVenue(String(sel.ids[0])); } catch (_) {}
+                    lastVid = null;
+                    return;
+                }
             }
             const ac = document.querySelector('.external-provider-edit-form wz-autocomplete') || document.querySelector('wz-autocomplete');
             if (ac && ac.shadowRoot) {
                 const items = ac.shadowRoot.querySelectorAll('wz-list-item, .option, [role="option"], li');
-                if (items.length > 0) { items[0].click(); d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>'; return; }
+                if (items.length > 0) {
+                    items[0].click();
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>';
+                    try { const sel = sdk?.Editing?.getSelection?.(); if (sel?.ids?.length === 1) unhighlightVenue(String(sel.ids[0])); } catch (_) {}
+                    lastVid = null;
+                    return;
+                }
             }
             const lists = document.querySelectorAll('.pac-container, [role="listbox"], .dropdown-menu, wz-list');
             for (const list of lists) {
                 const items = list.querySelectorAll('.pac-item, [role="option"], wz-list-item, li');
-                if (items.length > 0) { items[0].click(); d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>'; return; }
+                if (items.length > 0) {
+                    items[0].click();
+                    d.innerHTML += '<br><small style="color:#34a853;">✅ Готово!</small>';
+                    try { const sel = sdk?.Editing?.getSelection?.(); if (sel?.ids?.length === 1) unhighlightVenue(String(sel.ids[0])); } catch (_) {}
+                    lastVid = null;
+                    return;
+                }
             }
             waitForPac(d, addr, attempt + 1);
         }, 300);

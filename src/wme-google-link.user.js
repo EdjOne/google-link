@@ -2,9 +2,9 @@
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
 // @version             1.15.1
-// @description         🔍 Google Link — автоматичний пошук Google POI за адресою venues в Waze Map Editor. Знаходить Google Place по вулиці, номеру та місту, показує адресу, телефон, рейтинг. Підтримка перетягування панелі. https://github.com/EdjOne/google-link
-// @description:uk      🔍 Google Link — автоматичний пошук Google POI за адресою venues в Waze Map Editor. Знаходить Google Place по вулиці, номеру та місту, показує адресу, телефон, рейтинг. Підтримка перетягування панелі. https://github.com/EdjOne/google-link
-// @description:en      🔍 Google Link — auto-search Google POI by venue address in Waze Map Editor. Finds Google Place by street, number & city. Shows address, phone, rating. Draggable panel. https://github.com/EdjOne/google-link
+// @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
+// @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
+// @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
 // @match               *://www.waze.com/*/editor*

@@ -333,7 +333,9 @@
     function extractHouseNum(formattedAddr) {
         const parts = formattedAddr.split(',').map(s => s.trim());
         for (const part of parts) {
-            if (/^\d/.test(part)) return part.toLowerCase();
+            // Match short house numbers: 1-4 digits, optional letter/suffix (e.g. "20", "20А", "12-б", "20/1")
+            // Reject long numbers (postal codes), parts with spaces (street names starting with digit)
+            if (/^\d{1,4}[\/\-]?\d?[а-яіa-z]?$/i.test(part)) return part.toLowerCase();
         }
         return '';
     }

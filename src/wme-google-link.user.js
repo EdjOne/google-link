@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.15.0
+// @version             1.15.1
 // @description         Search Google Places by venue address
 // @author              EdjOne
 // @match               *://www.waze.com/editor*
@@ -232,6 +232,8 @@
                         // Skip address points (RPP/AT): residential, placeholder
                         if (use.residential || use.isResidential) return null;
                         if (use.isPlaceholder) return null;
+                        // Skip nature + parking
+                        if (isSkippedCategory(lv || v)) return null;
                         // If "unlinked only" is on, skip POIs that have externalProviderIDs
                         if (LS.showUnlinkedOnly()) {
                             const ep = a.externalProviderIds || a.externalProviderIDs;
@@ -250,6 +252,8 @@
                 const t = f[0]?.model?.type;
                 const attrs = f[0]?.model?.attributes;
                 if (t === 'venue' && !attrs?.isPlaceholder && !attrs?.residential && !attrs?.isResidential) {
+                    // Skip nature + parking
+                    if (isSkippedCategory(f[0]?.model)) return null;
                     // If "unlinked only" is on, skip POIs that have externalProviderIDs
                     if (LS.showUnlinkedOnly()) {
                         const ep = attrs?.externalProviderIds || attrs?.externalProviderIDs;
@@ -393,6 +397,14 @@
         } catch (_) {}
     }
 
+    // --- Check if venue should be skipped based on category ---
+    function isSkippedCategory(venue) {
+        const cats = venue?.attributes?.categories;
+        if (!Array.isArray(cats)) return false;
+        const SKIP = ['NATURAL_FEATURES', 'PARKING_LOT'];
+        return cats.some(c => SKIP.includes(c.name));
+    }
+
     function highlightUnlinked() {
         resetHighlights();
         try {
@@ -407,6 +419,7 @@
                 if (ep && ep.length > 0) continue; // skip linked
                 const isRH = venue.attributes?.residential || venue.attributes?.isResidential;
                 if (isRH) continue; // skip residential (like PlaceNames PLUS)
+                if (isSkippedCategory(venue)) continue; // skip nature + parking
 
                 // Highlight SVG icon
                 if (venueLayer.featureMap.has(mark)) {

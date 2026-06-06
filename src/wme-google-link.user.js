@@ -319,12 +319,18 @@
                     console.log(L, 'Alt streets: legacy street keys =', ls ? Object.keys(ls) : 'null');
                     console.log(L, 'Alt streets: legacy street attr keys =', ls?.attributes ? Object.keys(ls.attributes) : 'null');
                     const la = ls?.attributes;
+                    // Check for explicit alt names arrays
                     const an = la?.altNames || la?.alternativeNames || la?.names;
                     if (Array.isArray(an)) {
                         for (const n of an) {
                             const name = typeof n === 'string' ? n : n?.name || n?.primary || '';
                             if (name && !alts.includes(name)) alts.push(name);
                         }
+                    }
+                    // Also use englishName and signText if they differ from main name
+                    const mainName = (la?.name || '').toLowerCase();
+                    for (const extra of [la?.englishName, la?.signText]) {
+                        if (extra && extra.toLowerCase() !== mainName && !alts.includes(extra)) alts.push(extra);
                     }
                 } catch (_) {}
             }

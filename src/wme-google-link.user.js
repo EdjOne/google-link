@@ -315,7 +315,9 @@
             if (!alts.length) {
                 try {
                     const ls = uw.W?.model?.streets?.getObjectById?.(streetId);
-                    console.log(L, 'Alt streets: legacy street =', ls?.attributes);
+                    console.log(L, 'Alt streets: legacy street attrs =', ls?.attributes);
+                    console.log(L, 'Alt streets: legacy street keys =', ls ? Object.keys(ls) : 'null');
+                    console.log(L, 'Alt streets: legacy street attr keys =', ls?.attributes ? Object.keys(ls.attributes) : 'null');
                     const la = ls?.attributes;
                     const an = la?.altNames || la?.alternativeNames || la?.names;
                     if (Array.isArray(an)) {

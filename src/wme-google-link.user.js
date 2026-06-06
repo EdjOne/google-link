@@ -293,51 +293,24 @@
     function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
 
     // --- Get alternative (old) street names from the segment assigned to this venue ---
+    // WME stores alt street IDs in segment.attributes.streetIDs (array of IDs)
     function getAltStreets(vid) {
         const alts = [];
         try {
             const streetId = sdk?.DataModel?.Venues?.getAddress?.({ venueId: vid })?.street?.id;
             if (!streetId) return alts;
             console.log(L, 'Alt streets: streetId =', streetId);
-            // SDK fallback — check street object for altNames
-            try {
-                const sdkStreet = sdk?.DataModel?.Streets?.getById?.({ streetId: String(streetId) });
-                console.log(L, 'Alt streets: sdkStreet =', sdkStreet);
-                const an = sdkStreet?.altNames || sdkStreet?.attributes?.altNames;
-                if (Array.isArray(an)) {
-                    for (const n of an) {
-                        const name = typeof n === 'string' ? n : n?.name || n?.primary || '';
+            // Find a segment with this primaryStreetID and read its streetIDs array
+            const segs = uw.W?.model?.segments?.objects;
+            if (segs) {
+                const seg = Object.values(segs).find(s => s?.attributes?.primaryStreetID == streetId);
+                if (seg?.attributes?.streetIDs?.length) {
+                    const streets = uw.W?.model?.streets?.objects || {};
+                    for (const sid of seg.attributes.streetIDs) {
+                        const name = streets[String(sid)]?.attributes?.name;
                         if (name && !alts.includes(name)) alts.push(name);
                     }
                 }
-            } catch (_) {}
-            // Legacy fallback — W.model.addresses (alt addresses are separate objects)
-            if (!alts.length) {
-                try {
-                    const addrs = uw.W?.model?.addresses;
-                    if (addrs?.objects) {
-                        const mainName = uw.W?.model?.streets?.getObjectById?.(streetId)?.attributes?.name || '';
-                        console.log(L, 'Alt streets: main street name =', mainName, ', searching', Object.keys(addrs.objects).length, 'addresses');
-                        for (const id in addrs.objects) {
-                            const addr = addrs.objects[id];
-                            const aSid = addr?.attributes?.streetID;
-                            const aName = addr?.attributes?.name || '';
-                            if (aSid == streetId) {
-                                console.log(L, 'Alt streets: matching addr =', aName, 'streetID=', aSid);
-                            }
-                        }
-                        // Also check venue alt addresses
-                        try {
-                            const venue = uw.W?.model?.venues?.getObjectById?.(vid);
-                            if (venue) {
-                                console.log(L, 'Alt streets: venue keys =', Object.keys(venue));
-                                console.log(L, 'Alt streets: venue attr keys =', Object.keys(venue.attributes || {}));
-                                const vAddrs = venue.attributes?.addresses || venue.addresses;
-                                console.log(L, 'Alt streets: venue addresses =', vAddrs);
-                            }
-                        } catch (_) {}
-                    }
-                } catch (_) {}
             }
         } catch (_) {}
         console.log(L, 'Alt streets found:', alts.length, alts);

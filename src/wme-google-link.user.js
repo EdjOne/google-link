@@ -755,8 +755,10 @@
     }
 
     async function show(vid) {
+        console.log(L, 'show() called, vid=', vid);
         const old = document.getElementById('gl-p'); if (old) old.remove();
         const query = q(vid);
+        console.log(L, 'show() query:', query);
         if (!query) return;
 
         // Create floating panel
@@ -809,6 +811,7 @@
         }
 
         // 1) Search with main street
+        console.log(L, 'textSearch calling, ps:', !!ps, 'query:', makeOpts(null).query);
         ps.textSearch(makeOpts(null), (results, status) => {
             console.log(L, 'Main search:', status, results?.length || 0);
             if (!document.getElementById('gl-r')) return;

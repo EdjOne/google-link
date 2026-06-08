@@ -297,7 +297,7 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }
-    function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
+    function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); console.log(L, 'st() raw:', JSON.stringify(a?.street)); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
 
     // --- Get alternative (old) street names from the segment assigned to this venue ---
     // WME stores alt street IDs in segment.attributes.streetIDs (array of IDs)
@@ -704,6 +704,7 @@
         rEl.innerHTML = '';
         const showDist = LS.showDistance();
         const poiType = extractStreetType(poiRawStreet || '');
+        console.log(L, 'TYPE DEBUG: poiRawStreet=', JSON.stringify(poiRawStreet), 'poiType=', JSON.stringify(poiType));
         console.log(L, 'DEBUG poiRawStreet:', JSON.stringify(poiRawStreet), '→ poiType:', poiType);
         let shown = 0;
         for (const res of results) {

@@ -335,19 +335,20 @@
     };
     function extractStreetType(s) {
         const raw = (s || '').trim().toLowerCase();
-        // Try prefix first
-        const pm = raw.match(STREET_PREFIXES);
-        if (pm) {
-            const key = pm[1].replace(/\.$/, '').trim();
-            return STREET_TYPE_GROUPS[key] || key;
-        }
-        // Try suffix
-        const sm = raw.match(STREET_SUFFIXES);
-        if (sm) {
-            const key = sm[1].replace(/\.$/, '').trim();
-            return STREET_TYPE_GROUPS[key] || key;
-        }
-        return '';
+        // Search the full string for street type keywords
+        // Handles: "пров. Шуспева", "14 пров. Шуспева", "вулиця Шуспева, 14" etc.
+        const TYPE_RE = /(?:^|[\s,])(?:провулок|пров\.?|вулиця|вул\.?|улица|ул\.?|проспект|просп\.?|бульвар|бульв\.?|площа|пл\.?)(?:[\s,]|$)/i;
+        const m = raw.match(TYPE_RE);
+        if (!m) return '';
+        const kw = m[0].trim().replace(/[\s,]/g, '').replace(/\.$/, '');
+        const GROUPS = {
+            'провулок': 'lane', 'пров': 'lane',
+            'вулиця': 'street', 'вул': 'street', 'улица': 'street', 'ул': 'street',
+            'проспект': 'avenue', 'просп': 'avenue',
+            'бульвар': 'boulevard', 'бульв': 'boulevard',
+            'площа': 'square', 'пл': 'square',
+        };
+        return GROUPS[kw] || '';
     }
     function normStreet(s) { return (s || '').replace(STREET_PREFIXES, '').replace(STREET_SUFFIXES, '').trim().toLowerCase(); }
 
@@ -702,6 +703,7 @@
         rEl.innerHTML = '';
         const showDist = LS.showDistance();
         const poiType = extractStreetType(poiRawStreet || '');
+        console.log(L, 'showResults: poiRawStreet=', JSON.stringify(poiRawStreet), 'poiType=', poiType, 'poiStreet=', poiStreet);
         let shown = 0;
         for (const res of results) {
             if (!res.place_id?.startsWith('ChIJ')) continue;
@@ -710,6 +712,7 @@
             const gRawFirst = (res.formatted_address || '').split(',')[0] || '';
             const gType = extractStreetType(gRawFirst);
             const typeMismatch = !!(poiType && gType && poiType !== gType);
+            console.log(L, 'Result:', res.name, '| gRawFirst=', JSON.stringify(gRawFirst), 'gType=', gType, 'typeMismatch=', typeMismatch);
             if (loc && res.geometry?.location) {
                 try {
                     const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());

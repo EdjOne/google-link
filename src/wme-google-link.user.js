@@ -268,8 +268,9 @@
         return null;
     }
 
-    function onSel() { if (enabled) setTimeout(poll, 200); }
+    function onSel() { console.log(L, 'onSel() enabled=', enabled); if (enabled) setTimeout(poll, 200); }
     function poll() {
+        console.log(L, 'poll() START enabled=', enabled, 'lastVid=', lastVid);
         if (!enabled) return;
         const vid = getVid();
         if (vid && vid !== lastVid) {
@@ -744,6 +745,7 @@
     }
 
     async function show(vid) {
+        console.log(L, '>>> show() CALLED vid=', vid);
         const old = document.getElementById('gl-p'); if (old) old.remove();
         const query = q(vid);
         if (!query) return;
@@ -764,7 +766,7 @@
             </div>
         `;
         document.body.appendChild(p);
-        document.getElementById('gl-close').addEventListener('click', () => p.remove());
+        document.getElementById('gl-close').addEventListener('click', () => { lastVid = null; p.remove(); });
 
         // Ensure PlacesService
         if (!ps) {

@@ -703,6 +703,7 @@
             const gRawFirst = (res.formatted_address || '').split(',')[0] || '';
             const gType = extractStreetType(gRawFirst);
             const typeMismatch = !!(poiType && gType && poiType !== gType);
+            console.log(L, 'showResults:', res.name, '| poiType:', poiType, '| gType:', gType, '| mismatch:', typeMismatch, '| gRawFirst:', gRawFirst);
             if (loc && res.geometry?.location) {
                 try {
                     const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
@@ -713,7 +714,7 @@
             if (poiHN && gHN && gHN !== poiHN) { console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN); continue; }
             let streetLabel = '';
             if (poiStreet && gStreet) {
-                if (!streetMatch(poiStreet, gStreet)) streetLabel = '⚠️ ' + gStreet;
+                if (!streetMatch(poiStreet, gStreet, typeMismatch)) streetLabel = '⚠️ ' + gRawFirst;
             } else if (poiStreet && !gStreet) {
                 streetLabel = '⚠️ ?';
             }

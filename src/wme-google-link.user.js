@@ -272,7 +272,6 @@
     function poll() {
         if (!enabled) return;
         const vid = getVid();
-        console.log(L, 'poll() vid:', vid, 'lastVid:', lastVid, 'same:', vid === lastVid);
         if (vid && vid !== lastVid) {
             lastVid = vid;
             console.log(L, 'Venue:', vid);
@@ -297,7 +296,7 @@
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
     function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }
-    function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); console.log(L, 'st() raw:', JSON.stringify(a?.street)); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
+    function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
 
     // --- Get alternative (old) street names from the segment assigned to this venue ---
     // WME stores alt street IDs in segment.attributes.streetIDs (array of IDs)
@@ -326,32 +325,7 @@
 
     const STREET_PREFIXES = /^(вул\.|вулиця|ул\.|улица|бульв\.|бульвар|просп\.|проспект|пров\.|провулок|пл\.|площа)\s*/i;
     const STREET_SUFFIXES = /\s+(вулиця|вул\.|улица|ул\.|бульвар|бульв\.|проспект|просп\.|провулок|пров\.|площа|пл\.)$/i;
-    // Group aliases: вул/улица/вулиця = one type, пров/провулок = one type, etc.
-    const STREET_TYPE_GROUPS = {
-        'вул': 'street', 'вулиця': 'street', 'ул': 'street', 'улица': 'street',
-        'пров': 'lane', 'провулок': 'lane',
-        'просп': 'avenue', 'проспект': 'avenue',
-        'бульв': 'boulevard', 'бульвар': 'boulevard',
-        'пл': 'square', 'площа': 'square',
-    };
-    function extractStreetType(s) {
-        const raw = (s || '').trim().toLowerCase();
-        // Search the full string for street type keywords
-        // Handles: "пров. Шуспева", "14 пров. Шуспева", "вулиця Шуспева, 14" etc.
-        const TYPE_RE = /(?:^|[\s,])(?:провулок|пров\.?|вулиця|вул\.?|улица|ул\.?|проспект|просп\.?|бульвар|бульв\.?|площа|пл\.?)(?:[\s,]|$)/i;
-        const m = raw.match(TYPE_RE);
-        if (!m) return '';
-        const kw = m[0].trim().replace(/[\s,]/g, '').replace(/\.$/, '');
-        const GROUPS = {
-            'провулок': 'lane', 'пров': 'lane',
-            'вулиця': 'street', 'вул': 'street', 'улица': 'street', 'ул': 'street',
-            'проспект': 'avenue', 'просп': 'avenue',
-            'бульвар': 'boulevard', 'бульв': 'boulevard',
-            'площа': 'square', 'пл': 'square',
-        };
-        return GROUPS[kw] || '';
-    }
-    // Group aliases for street type comparison
+    // Group aliases for street type comparison (UA+RU)
     const STREET_TYPE_MAP = {
         'вул': 'street', 'вулиця': 'street', 'ул': 'street', 'улица': 'street',
         'пров': 'lane', 'провулок': 'lane',
@@ -720,8 +694,6 @@
         rEl.innerHTML = '';
         const showDist = LS.showDistance();
         const poiType = extractStreetType(poiRawStreet || '');
-        console.log(L, 'TYPE DEBUG: poiRawStreet=', JSON.stringify(poiRawStreet), 'poiType=', JSON.stringify(poiType));
-        console.log(L, 'DEBUG poiRawStreet:', JSON.stringify(poiRawStreet), '→ poiType:', poiType);
         let shown = 0;
         for (const res of results) {
             if (!res.place_id?.startsWith('ChIJ')) continue;
@@ -730,7 +702,6 @@
             const gRawFirst = (res.formatted_address || '').split(',')[0] || '';
             const gType = extractStreetType(gRawFirst);
             const typeMismatch = !!(poiType && gType && poiType !== gType);
-            console.log(L, 'DEBUG res:', res.name, '| formatted:', JSON.stringify(res.formatted_address), '| gRawFirst:', JSON.stringify(gRawFirst), '| gType:', gType, '| typeMismatch:', typeMismatch);
             if (loc && res.geometry?.location) {
                 try {
                     const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
@@ -741,7 +712,7 @@
             if (poiHN && gHN && gHN !== poiHN) { console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN); continue; }
             let streetLabel = '';
             if (poiStreet && gStreet) {
-                if (!streetMatch(poiStreet, gStreet, typeMismatch)) streetLabel = '⚠️ ' + gRawFirst;
+                if (!streetMatch(poiStreet, gStreet)) streetLabel = '⚠️ ' + gStreet;
             } else if (poiStreet && !gStreet) {
                 streetLabel = '⚠️ ?';
             }
@@ -773,10 +744,8 @@
     }
 
     async function show(vid) {
-        console.log(L, 'show() called, vid=', vid);
         const old = document.getElementById('gl-p'); if (old) old.remove();
         const query = q(vid);
-        console.log(L, 'show() query:', query);
         if (!query) return;
 
         // Create floating panel
@@ -829,7 +798,6 @@
         }
 
         // 1) Search with main street
-        console.log(L, 'textSearch calling, ps:', !!ps, 'query:', makeOpts(null).query);
         ps.textSearch(makeOpts(null), (results, status) => {
             console.log(L, 'Main search:', status, results?.length || 0);
             if (!document.getElementById('gl-r')) return;

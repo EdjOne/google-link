@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.15.1
+// @version             1.15.2
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.14.3 loaded =====');
+    console.log('[GL] ===== v1.15.2 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -105,7 +105,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.14.3</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.15.2</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -325,6 +325,30 @@
 
     const STREET_PREFIXES = /^(вул\.|вулиця|ул\.|улица|бульв\.|бульвар|просп\.|проспект|пров\.|провулок|пл\.|площа)\s*/i;
     const STREET_SUFFIXES = /\s+(вулиця|вул\.|улица|ул\.|бульвар|бульв\.|проспект|просп\.|провулок|пров\.|площа|пл\.)$/i;
+    // Group aliases: вул/улица/вулиця = one type, пров/провулок = one type, etc.
+    const STREET_TYPE_GROUPS = {
+        'вул': 'street', 'вулиця': 'street', 'ул': 'street', 'улица': 'street',
+        'пров': 'lane', 'провулок': 'lane',
+        'просп': 'avenue', 'проспект': 'avenue',
+        'бульв': 'boulevard', 'бульвар': 'boulevard',
+        'пл': 'square', 'площа': 'square',
+    };
+    function extractStreetType(s) {
+        const raw = (s || '').trim().toLowerCase();
+        // Try prefix first
+        const pm = raw.match(STREET_PREFIXES);
+        if (pm) {
+            const key = pm[1].replace(/\.$/, '').trim();
+            return STREET_TYPE_GROUPS[key] || key;
+        }
+        // Try suffix
+        const sm = raw.match(STREET_SUFFIXES);
+        if (sm) {
+            const key = sm[1].replace(/\.$/, '').trim();
+            return STREET_TYPE_GROUPS[key] || key;
+        }
+        return '';
+    }
     function normStreet(s) { return (s || '').replace(STREET_PREFIXES, '').replace(STREET_SUFFIXES, '').trim().toLowerCase(); }
 
     function extractStreet(formattedAddr) {
@@ -366,9 +390,11 @@
     }
 
     // Streets match if Levenshtein distance ≤ 3 (handles відрадний/отрадний, transliteration)
-    function streetMatch(s1, s2) {
+    // typeMismatch: true if both have known types but they differ (e.g. провулок vs вулиця)
+    function streetMatch(s1, s2, typeMismatch) {
         if (!s1 || !s2) return true;
         if (s1 === s2) return true;
+        if (typeMismatch) return false;
         return levenshtein(s1, s2) <= 3;
     }
 
@@ -671,15 +697,19 @@
     }
 
     // --- Display search results in the panel ---
-    function showResults(vid, results, status, rEl, poiStreet, poiHN, loc, radius) {
+    function showResults(vid, results, status, rEl, poiStreet, poiHN, loc, radius, poiRawStreet) {
         if (status !== 'OK' || !results?.length) return false;
         rEl.innerHTML = '';
         const showDist = LS.showDistance();
+        const poiType = extractStreetType(poiRawStreet || '');
         let shown = 0;
         for (const res of results) {
             if (!res.place_id?.startsWith('ChIJ')) continue;
             const gHN = extractHouseNum(res.formatted_address || '');
             const gStreet = extractStreet(res.formatted_address || '');
+            const gRawFirst = (res.formatted_address || '').split(',')[0] || '';
+            const gType = extractStreetType(gRawFirst);
+            const typeMismatch = !!(poiType && gType && poiType !== gType);
             if (loc && res.geometry?.location) {
                 try {
                     const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
@@ -690,7 +720,7 @@
             if (poiHN && gHN && gHN !== poiHN) { console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN); continue; }
             let streetLabel = '';
             if (poiStreet && gStreet) {
-                if (!streetMatch(poiStreet, gStreet)) streetLabel = '⚠️ ' + gStreet;
+                if (!streetMatch(poiStreet, gStreet, typeMismatch)) streetLabel = '⚠️ ' + gRawFirst;
             } else if (poiStreet && !gStreet) {
                 streetLabel = '⚠️ ?';
             }
@@ -761,7 +791,8 @@
         const loc = ll(vid);
         const radius = LS.maxRadius();
         const poiHN = hn(vid).toLowerCase();
-        const poiStreet = normStreet(st(vid));
+        const poiRawStreet = st(vid);
+        const poiStreet = normStreet(poiRawStreet);
         const altStreets = getAltStreets(vid);
         const rEl = document.getElementById('gl-r');
 
@@ -778,7 +809,7 @@
         ps.textSearch(makeOpts(null), (results, status) => {
             console.log(L, 'Main search:', status, results?.length || 0);
             if (!document.getElementById('gl-r')) return;
-            if (showResults(vid, results, status, rEl, poiStreet, poiHN, loc, radius)) return;
+            if (showResults(vid, results, status, rEl, poiStreet, poiHN, loc, radius, poiRawStreet)) return;
 
             // 2) No results — try alternative (old) street names
             if (!altStreets.length) {
@@ -797,7 +828,7 @@
                 console.log(L, 'Alt search:', altQ);
                 ps.textSearch(makeOpts(altQ), (res2, st2) => {
                     if (!document.getElementById('gl-r')) return;
-                    if (showResults(vid, res2, st2, rEl, normStreet(altQ), poiHN, loc, radius)) return;
+                    if (showResults(vid, res2, st2, rEl, normStreet(altQ), poiHN, loc, radius, poiRawStreet)) return;
                     ai++;
                     tryAlt();
                 });

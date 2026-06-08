@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.15.2
+// @version             1.15.3
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.15.2 loaded =====');
+    console.log('[GL] ===== v1.15.3 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -105,7 +105,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.15.2</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.15.3</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -350,6 +350,22 @@
             'площа': 'square', 'пл': 'square',
         };
         return GROUPS[kw] || '';
+    }
+    // Group aliases for street type comparison
+    const STREET_TYPE_MAP = {
+        'вул': 'street', 'вулиця': 'street', 'ул': 'street', 'улица': 'street',
+        'пров': 'lane', 'провулок': 'lane',
+        'просп': 'avenue', 'проспект': 'avenue',
+        'бульв': 'boulevard', 'бульвар': 'boulevard',
+        'пл': 'square', 'площа': 'square',
+    };
+    function extractStreetType(s) {
+        const raw = (s || '').trim().toLowerCase();
+        const TYPE_RE = /(?:^|[\s,])(?:провулок|пров\.?|вулиця|вул\.?|улица|ул\.?|проспект|просп\.?|бульвар|бульв\.?|площа|пл\.?)(?:[\s,]|$)/i;
+        const m = raw.match(TYPE_RE);
+        if (!m) return '';
+        const kw = m[0].trim().replace(/[\s,]/g, '').replace(/\.$/, '');
+        return STREET_TYPE_MAP[kw] || '';
     }
     function normStreet(s) { return (s || '').replace(STREET_PREFIXES, '').replace(STREET_SUFFIXES, '').trim().toLowerCase(); }
 

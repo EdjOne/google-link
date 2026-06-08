@@ -272,6 +272,7 @@
     function poll() {
         if (!enabled) return;
         const vid = getVid();
+        console.log(L, 'poll() vid:', vid, 'lastVid:', lastVid, 'same:', vid === lastVid);
         if (vid && vid !== lastVid) {
             lastVid = vid;
             console.log(L, 'Venue:', vid);

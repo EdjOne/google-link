@@ -703,7 +703,6 @@
         rEl.innerHTML = '';
         const showDist = LS.showDistance();
         const poiType = extractStreetType(poiRawStreet || '');
-        console.log(L, 'showResults: poiRawStreet=', JSON.stringify(poiRawStreet), 'poiType=', poiType, 'poiStreet=', poiStreet);
         let shown = 0;
         for (const res of results) {
             if (!res.place_id?.startsWith('ChIJ')) continue;
@@ -712,7 +711,6 @@
             const gRawFirst = (res.formatted_address || '').split(',')[0] || '';
             const gType = extractStreetType(gRawFirst);
             const typeMismatch = !!(poiType && gType && poiType !== gType);
-            console.log(L, 'Result:', res.name, '| gRawFirst=', JSON.stringify(gRawFirst), 'gType=', gType, 'typeMismatch=', typeMismatch);
             if (loc && res.geometry?.location) {
                 try {
                     const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());

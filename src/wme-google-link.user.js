@@ -296,7 +296,7 @@
 function ll(vid) {
         try {
             const v = sdk.DataModel.Venues.getById({ venueId: vid });
-            console.log(L, 'll: geometry keys =', v?.geometry ? Object.keys(v.geometry) : 'null', 'coords type:', typeof v?.geometry?.coordinates, Array.isArray(v?.geometry?.coordinates) ? 'len=' + v.geometry.coordinates.length : '');
+            console.log(L, 'll: geometry keys =', v?.geometry ? Object.keys(v.geometry) : 'null', 'coords type:', typeof v?.geometry?.coordinates, Array.isArray(v?.geometry?.coordinates) ? 'len=' + v.geometry.coordinates.length : '', 'c0:', JSON.stringify(v?.geometry?.coordinates?.[0]));
             const c = v?.geometry?.coordinates;
             if (Array.isArray(c) && c.length >= 2) {
                 const lat = +c[1], lng = +c[0];

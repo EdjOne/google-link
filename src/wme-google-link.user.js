@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.15.6
+// @version             1.15.7
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -293,7 +293,24 @@
         } catch (_) { return ''; }
     }
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
-    function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
+    function ll(vid) {
+        try {
+            const v = sdk.DataModel.Venues.getById({ venueId: vid });
+            if (!v?.geometry) return null;
+            const g = v.geometry;
+            let lat, lng;
+            // GeoJSON array: [lng, lat]
+            if (Array.isArray(g.coordinates) && g.coordinates.length >= 2) {
+                lat = Number(g.coordinates[1]); lng = Number(g.coordinates[0]);
+            }
+            // Fallback: object {lat, lng}
+            if (!isFinite(lat) || !isFinite(lng)) {
+                lat = Number(g.coordinates?.lat ?? g.coordinates?.latitude ?? g.location?.lat);
+                lng = Number(g.coordinates?.lng ?? g.coordinates?.longitude ?? g.location?.lng);
+            }
+            return (isFinite(lat) && isFinite(lng)) ? { lat, lng } : null;
+        } catch (_) { return null; }
+    }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }
     function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
 
@@ -706,8 +723,9 @@
             if (loc && res.geometry?.location) {
                 try {
                     const rl1 = res.geometry.location;
-                    const rlat1 = typeof rl1.lat === 'function' ? rl1.lat() : rl1.lat;
-                    const rlng1 = typeof rl1.lng === 'function' ? rl1.lng() : rl1.lng;
+                    let rlat1 = typeof rl1.lat === 'function' ? rl1.lat() : rl1.lat;
+                    let rlng1 = typeof rl1.lng === 'function' ? rl1.lng() : rl1.lng;
+                    if (!isFinite(rlat1) || !isFinite(rlng1)) { rlat1 = Number(rl1?.latitude); rlng1 = Number(rl1?.longitude); }
                     const dist = haversine(loc.lat, loc.lng, rlat1, rlng1);
                     if (!isFinite(dist)) continue;
                     resultDist = dist;
@@ -731,8 +749,9 @@
             if (showDist && loc && res.geometry?.location) {
                 try {
                     const rl = res.geometry.location;
-                    const rlat = typeof rl.lat === 'function' ? rl.lat() : rl.lat;
-                    const rlng = typeof rl.lng === 'function' ? rl.lng() : rl.lng;
+                    let rlat = typeof rl.lat === 'function' ? rl.lat() : rl.lat;
+                    let rlng = typeof rl.lng === 'function' ? rl.lng() : rl.lng;
+                    if (!isFinite(rlat) || !isFinite(rlng)) { rlat = Number(rl?.latitude); rlng = Number(rl?.longitude); }
                     const dist = haversine(loc.lat, loc.lng, rlat, rlng);
                     if (!isFinite(dist)) throw new Error('NaN');
                     resultDist = dist;

@@ -296,21 +296,31 @@
 function ll(vid) {
         try {
             const v = sdk.DataModel.Venues.getById({ venueId: vid });
+            console.log(L, 'll: geometry keys =', v?.geometry ? Object.keys(v.geometry) : 'null', 'coords type:', typeof v?.geometry?.coordinates, Array.isArray(v?.geometry?.coordinates) ? 'len=' + v.geometry.coordinates.length : '');
             const c = v?.geometry?.coordinates;
             if (Array.isArray(c) && c.length >= 2) {
                 const lat = +c[1], lng = +c[0];
+                console.log(L, 'll: SDK coords =', lat, lng);
                 if (isFinite(lat) && isFinite(lng)) return { lat, lng };
             }
-        } catch (_) {}
-        // Fallback: legacy model (venues may have coords here only)
+            // Try geometry.location (some venues)
+            const loc = v?.geometry?.location;
+            if (loc) {
+                console.log(L, 'll: geometry.location =', JSON.stringify(loc));
+                const lat = +(loc.lat ?? loc.latitude), lng = +(loc.lng ?? loc.longitude);
+                if (isFinite(lat) && isFinite(lng)) return { lat, lng };
+            }
+        } catch (e) { console.log(L, 'll SDK err:', e.message); }
+        // Fallback: legacy model
         try {
             const lv = uw.W?.model?.venues?.getObjectById(vid);
+            console.log(L, 'll: legacy geometry keys =', lv?.geometry ? Object.keys(lv.geometry) : 'null');
             const c = lv?.geometry?.coordinates;
             if (Array.isArray(c) && c.length >= 2) {
                 const lat = +c[1], lng = +c[0];
                 if (isFinite(lat) && isFinite(lng)) return { lat, lng };
             }
-        } catch (_) {}
+        } catch (e) { console.log(L, 'll legacy err:', e.message); }
         return null;
     }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }

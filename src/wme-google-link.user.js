@@ -705,7 +705,11 @@
             console.log(L, 'showResults:', res.name, '| poiType:', poiType, '| gType:', gType, '| mismatch:', typeMismatch, '| gRawFirst:', gRawFirst);
             if (loc && res.geometry?.location) {
                 try {
-                    const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
+                    const rl1 = res.geometry.location;
+                    const rlat1 = typeof rl1.lat === 'function' ? rl1.lat() : rl1.lat;
+                    const rlng1 = typeof rl1.lng === 'function' ? rl1.lng() : rl1.lng;
+                    const dist = haversine(loc.lat, loc.lng, rlat1, rlng1);
+                    if (!isFinite(dist)) continue;
                     resultDist = dist;
                     if (dist > radius) { console.log(L, 'Skip (too far):', res.name, '—', fmtDist(dist)); continue; }
                 } catch (_) {}
@@ -727,7 +731,10 @@
             if (showDist && loc && res.geometry?.location) {
                 try {
                     const rl = res.geometry.location;
-                    const dist = haversine(loc.lat, loc.lng, rl.lat(), rl.lng());
+                    const rlat = typeof rl.lat === 'function' ? rl.lat() : rl.lat;
+                    const rlng = typeof rl.lng === 'function' ? rl.lng() : rl.lng;
+                    const dist = haversine(loc.lat, loc.lng, rlat, rlng);
+                    if (!isFinite(dist)) throw new Error('NaN');
                     resultDist = dist;
                     const color = dist < 50 ? '#34a853' : dist < 300 ? '#f9a825' : '#ea4335';
                     distHtml = `<br><small style="color:${color};">📍 ${fmtDist(dist)}</small>`;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.15.9
+// @version             1.16.0
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -296,31 +296,23 @@
 function ll(vid) {
         try {
             const v = sdk.DataModel.Venues.getById({ venueId: vid });
-            console.log(L, 'll: geometry keys =', v?.geometry ? Object.keys(v.geometry) : 'null', 'coords type:', typeof v?.geometry?.coordinates, Array.isArray(v?.geometry?.coordinates) ? 'len=' + v.geometry.coordinates.length : '', 'c0:', JSON.stringify(v?.geometry?.coordinates?.[0]));
-            const c = v?.geometry?.coordinates;
-            if (Array.isArray(c) && c.length >= 2) {
-                const lat = +c[1], lng = +c[0];
-                console.log(L, 'll: SDK coords =', lat, lng);
-                if (isFinite(lat) && isFinite(lng)) return { lat, lng };
-            }
-            // Try geometry.location (some venues)
-            const loc = v?.geometry?.location;
-            if (loc) {
-                console.log(L, 'll: geometry.location =', JSON.stringify(loc));
-                const lat = +(loc.lat ?? loc.latitude), lng = +(loc.lng ?? loc.longitude);
-                if (isFinite(lat) && isFinite(lng)) return { lat, lng };
-            }
-        } catch (e) { console.log(L, 'll SDK err:', e.message); }
-        // Fallback: legacy model
-        try {
-            const lv = uw.W?.model?.venues?.getObjectById(vid);
-            console.log(L, 'll: legacy geometry keys =', lv?.geometry ? Object.keys(lv.geometry) : 'null');
-            const c = lv?.geometry?.coordinates;
-            if (Array.isArray(c) && c.length >= 2) {
+            const g = v?.geometry;
+            if (!g) return null;
+            const c = g.coordinates;
+            // Point: [lng, lat]
+            if (Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number') {
                 const lat = +c[1], lng = +c[0];
                 if (isFinite(lat) && isFinite(lng)) return { lat, lng };
             }
-        } catch (e) { console.log(L, 'll legacy err:', e.message); }
+            // Polygon: [[[lng, lat], ...]] — take centroid of first ring
+            if (Array.isArray(c) && Array.isArray(c[0]) && Array.isArray(c[0][0])) {
+                const ring = c[0];
+                let slat = 0, slng = 0;
+                for (const pt of ring) { slat += pt[1]; slng += pt[0]; }
+                const lat = slat / ring.length, lng = slng / ring.length;
+                if (isFinite(lat) && isFinite(lng)) return { lat, lng };
+            }
+        } catch (_) {}
         return null;
     }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }

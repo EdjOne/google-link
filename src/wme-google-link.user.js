@@ -239,7 +239,6 @@
                         // If "unlinked only" is on, skip POIs that have externalProviderIDs
                         if (LS.showUnlinkedOnly()) {
                             const ep = a.externalProviderIds || a.externalProviderIDs;
-                            console.log(L, 'Unlinked check:', s.ids[0], 'externalProviderIds:', ep?.length || 0, ep);
                             if (ep?.length > 0) return null;
                         }
                     } catch (e) { console.warn(L, 'Venue check failed:', e); }
@@ -268,9 +267,8 @@
         return null;
     }
 
-    function onSel() { console.log(L, 'onSel() enabled=', enabled); if (enabled) setTimeout(poll, 200); }
+    function onSel() { if (enabled) setTimeout(poll, 200); }
     function poll() {
-        console.log(L, 'poll() START enabled=', enabled, 'lastVid=', lastVid);
         if (!enabled) return;
         const vid = getVid();
         if (vid && vid !== lastVid) {

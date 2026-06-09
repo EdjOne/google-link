@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.15.3
+// @version             1.15.4
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -696,6 +696,7 @@
         const showDist = LS.showDistance();
         const poiType = extractStreetType(poiRawStreet || '');
         let shown = 0;
+        let resultDist = 0;
         for (const res of results) {
             if (!res.place_id?.startsWith('ChIJ')) continue;
             const gHN = extractHouseNum(res.formatted_address || '');
@@ -707,6 +708,7 @@
             if (loc && res.geometry?.location) {
                 try {
                     const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
+                    resultDist = dist;
                     if (dist > radius) { console.log(L, 'Skip (too far):', res.name, '—', fmtDist(dist)); continue; }
                 } catch (_) {}
             }
@@ -718,13 +720,17 @@
             } else if (poiStreet && !gStreet) {
                 streetLabel = '⚠️ ?';
             }
+            const isSuspect = typeMismatch && resultDist > 150;
             const d = document.createElement('div');
-            d.style.cssText = 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;';
+            d.style.cssText = isSuspect
+                ? 'padding:6px 8px;border:2px solid #ea4335;border-radius:4px;margin-bottom:4px;cursor:pointer;background:#fff5f5;'
+                : 'padding:6px 8px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:4px;cursor:pointer;';
             let distHtml = '';
             if (showDist && loc && res.geometry?.location) {
                 try {
                     const rl = res.geometry.location;
                     const dist = haversine(loc.lat, loc.lng, rl.lat(), rl.lng());
+                    resultDist = dist;
                     const color = dist < 50 ? '#34a853' : dist < 300 ? '#f9a825' : '#ea4335';
                     distHtml = `<br><small style="color:${color};">📍 ${fmtDist(dist)}</small>`;
                 } catch (_) {}
@@ -734,6 +740,14 @@
             d.onmouseenter = () => d.style.background = '#f0f6ff';
             d.onmouseleave = () => d.style.background = '#fff';
             d.onclick = () => {
+                if (isSuspect && !d.dataset.confirmed) {
+                    d.style.background = '#fce8e6';
+                    if (!d.querySelector('.gl-confirm')) {
+                        d.insertAdjacentHTML('beforeend', '<br><small class="gl-confirm" style="color:#ea4335;font-weight:bold;">⚠️ Натисніть ще раз для підтвердження</small>');
+                    }
+                    d.dataset.confirmed = '1';
+                    return;
+                }
                 try {
                     d.style.background = '#e8f0fe';
                     linkPlace(res.formatted_address || res.name || '', res.place_id, d);

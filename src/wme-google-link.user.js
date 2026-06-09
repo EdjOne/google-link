@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.15.9-debug
+// @version             1.15.9
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -293,7 +293,26 @@
         } catch (_) { return ''; }
     }
     function nm(vid) { try { return sdk.DataModel.Venues.getById({ venueId: vid })?.name || ''; } catch (_) { return ''; } }
-function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }); return v?.geometry?.coordinates ? { lat: v.geometry.coordinates[1], lng: v.geometry.coordinates[0] } : null; } catch (_) { return null; } }
+function ll(vid) {
+        try {
+            const v = sdk.DataModel.Venues.getById({ venueId: vid });
+            const c = v?.geometry?.coordinates;
+            if (Array.isArray(c) && c.length >= 2) {
+                const lat = +c[1], lng = +c[0];
+                if (isFinite(lat) && isFinite(lng)) return { lat, lng };
+            }
+        } catch (_) {}
+        // Fallback: legacy model (venues may have coords here only)
+        try {
+            const lv = uw.W?.model?.venues?.getObjectById(vid);
+            const c = lv?.geometry?.coordinates;
+            if (Array.isArray(c) && c.length >= 2) {
+                const lat = +c[1], lng = +c[0];
+                if (isFinite(lat) && isFinite(lng)) return { lat, lng };
+            }
+        } catch (_) {}
+        return null;
+    }
     function hn(vid) { try { return sdk.DataModel.Venues.getAddress({ venueId: vid })?.houseNumber || ''; } catch (_) { return ''; } }
     function st(vid) { try { const a = sdk.DataModel.Venues.getAddress({ venueId: vid }); return a?.street?.name || a?.street?.englishName || ''; } catch (_) { return ''; } }
 
@@ -727,19 +746,12 @@ function ll(vid) { try { const v = sdk.DataModel.Venues.getById({ venueId: vid }
             let distHtml = '';
             if (showDist && loc && res.geometry?.location) {
                 try {
-                    const rl = res.geometry.location;
-                    const rlLat = rl.lat, rlLng = rl.lng;
-                    console.log(L, 'dist debug:', 'loc:', loc.lat, loc.lng, 'rl type:', typeof rlLat, typeof rlLng, 'isFunc:', typeof rlLat === 'function');
-                    const dlat = typeof rlLat === 'function' ? rlLat() : rlLat;
-                    const dlng = typeof rlLng === 'function' ? rlLng() : rlLng;
-                    console.log(L, 'dist debug2:', dlat, dlng, 'isFinite:', isFinite(dlat) && isFinite(dlng));
-                    const dist = haversine(loc.lat, loc.lng, dlat, dlng);
-                    console.log(L, 'dist debug3:', dist, 'finite:', isFinite(dist));
+                    const dist = haversine(loc.lat, loc.lng, res.geometry.location.lat(), res.geometry.location.lng());
                     if (!isFinite(dist)) throw new Error('NaN');
                     resultDist = dist;
                     const color = dist < 50 ? '#34a853' : dist < 300 ? '#f9a825' : '#ea4335';
                     distHtml = `<br><small style="color:${color};">📍 ${fmtDist(dist)}</small>`;
-                } catch (e) { console.log(L, 'dist catch:', e.message); }
+                } catch (_) {}
             }
             const streetWarn = streetLabel ? `<br><small style="color:#f9a825;">${streetLabel}</small>` : '';
             d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}${streetWarn}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${res.place_id}</small>`;

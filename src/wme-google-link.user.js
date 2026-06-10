@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.17.1
+// @version             1.17.2
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.17.1 loaded =====');
+    console.log('[GL] ===== v1.17.2 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -733,7 +733,9 @@ function ll(vid) {
                 } catch (_) {}
             }
             if (poiHN && !gHN) { console.log(L, 'Skip (no house number):', res.name); continue; }
-            if (poiHN && gHN && gHN !== poiHN) { console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN); continue; }
+            // Compare house numbers: strip trailing Cyrillic letters (146д → 146)
+            const hnNorm = s => s.replace(/[а-яіёґ]+$/i, '');
+            if (poiHN && gHN && hnNorm(gHN) !== hnNorm(poiHN)) { console.log(L, 'Skip (number mismatch):', gHN, '≠', poiHN); continue; }
             let streetLabel = '';
             if (poiStreet && gStreet) {
                 if (!streetMatch(poiStreet, gStreet, typeMismatch)) streetLabel = '⚠️ ' + gRawFirst;

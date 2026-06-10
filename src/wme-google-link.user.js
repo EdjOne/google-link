@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.19.9
+// @version             1.20.0
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.19.9 loaded =====');
+    console.log('[GL] ===== v1.20.0 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -171,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.9</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.0</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -934,33 +934,23 @@ function ll(vid) {
             let ai = 0;
             function tryAlt() {
                 if (ai >= altStreets.length) {
-                    // 3) Fallback: try without house number
+                    // 3) Fallback: try "number street, city" (no type prefix)
                     if (poiHN) {
-                        const noHN = query.split(',').filter((_, i) => i !== 1).join(', ');
-                        console.log(L, 'Fallback (no HN):', noHN);
-                        rEl.innerHTML = '<div style="color:#666;">⏳ Спроба без номера...</div>';
-                        ps.textSearch({ query: noHN, location: loc ? new google.maps.LatLng(loc.lat, loc.lng) : undefined, radius: loc ? radius : undefined }, (res3, st3) => {
-                            if (!document.getElementById('gl-r')) return;
-                            // Don't filter by house number in no-HN fallback
-                            if (showResults(vid, res3, st3, rEl, poiStreet, '', loc, radius, poiRawStreet)) return;
-                            // 4) Fallback: try street name only (no type prefix, no number)
-                            const rawName = poiRawStreet.replace(STREET_PREFIXES, '').trim();
-                            if (rawName) {
-                                const streetOnly = rawName + ', ' + query.split(',').slice(2).join(', ');
-                                console.log(L, 'Fallback (street only):', streetOnly);
-                                rEl.innerHTML = '<div style="color:#666;">⏳ Спроба за назвою вулиці...</div>';
-                                ps.textSearch({ query: streetOnly, location: loc ? new google.maps.LatLng(loc.lat, loc.lng) : undefined, radius: loc ? radius : undefined }, (res4, st4) => {
-                                    if (!document.getElementById('gl-r')) return;
-                                    showResults(vid, res4, st4, rEl, poiStreet, poiHN, loc, radius, poiRawStreet);
-                                    if (!document.getElementById('gl-r')?.children.length) {
-                                        rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
-                                    }
-                                });
-                            } else {
-                                rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
-                            }
-                        });
-                        return;
+                        const rawName = poiRawStreet.replace(STREET_PREFIXES, '').trim();
+                        const city = query.split(',').slice(2).join(',').trim();
+                        const altQ2 = rawName ? [poiHN, rawName, city].filter(Boolean).join(', ') : '';
+                        if (altQ2) {
+                            console.log(L, 'Fallback (alt format):', altQ2);
+                            rEl.innerHTML = '<div style="color:#666;">⏳ Спроба іншим форматом...</div>';
+                            ps.textSearch({ query: altQ2, location: loc ? new google.maps.LatLng(loc.lat, loc.lng) : undefined, radius: loc ? radius : undefined }, (res3, st3) => {
+                                if (!document.getElementById('gl-r')) return;
+                                showResults(vid, res3, st3, rEl, poiStreet, poiHN, loc, radius, poiRawStreet);
+                                if (!document.getElementById('gl-r')?.children.length) {
+                                    rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
+                                }
+                            });
+                            return;
+                        }
                     }
                     rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
                     return;

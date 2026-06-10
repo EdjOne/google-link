@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.18.2
+// @version             1.19.0
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -11,12 +11,13 @@
 // @match               *://editor.waze.com/*
 // @match               *://editor-beta.waze.com/*
 // @match               *://beta.waze.com/*/editor*
+// @require             https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js
 // @grant               none
 // @run-at              document-start
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.18.2 loaded =====');
+    console.log('[GL] ===== v1.19.0 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -81,59 +82,51 @@
     }
 
     // --- Hover line: dashed line from POI to Google result ---
-    // --- Hover line: SVG dashed line from POI to Google result ---
-    let _hoverSvg = null;
+    // --- Hover line: WME SDK vector layer ---
+    const GL_LINE_LAYER = 'google-link-hover';
+
+    function initHoverLayer() {
+        try {
+            if (!sdk?.Map) return;
+            sdk.Map.addLayer({
+                layerName: GL_LINE_LAYER,
+                styleRules: [
+                    {
+                        predicate: (props) => props?.styleName === 'glLine',
+                        style: {
+                            strokeWidth: 3,
+                            strokeColor: '#4285f4',
+                            strokeOpacity: 0.85,
+                            strokeDashstyle: 'dash',
+                            graphicZIndex: 9999,
+                        }
+                    }
+                ]
+            });
+            sdk.Map.setLayerVisibility({ layerName: GL_LINE_LAYER, visibility: false });
+        } catch (_) {}
+    }
 
     function drawHoverLine(poiLoc, gLoc) {
-        console.log(L, 'drawHoverLine: showLine=', LS.showLine(), 'poiLoc=', poiLoc, 'gLoc=', gLoc);
         if (!LS.showLine()) return;
         try {
-            const map = uw.W?.map;
-            if (!map) { console.log(L, 'drawHoverLine: no map'); return; }
-            // Get pixel coords from lat/lng using map projection
-            const getPx = (lat, lng) => {
-                try {
-                    // OL2 style: map.getLayerPxFromLonLat
-                    const ll = new OpenLayers.LonLat(lng, lat);
-                    const px = map.getLayerPxFromLonLat(ll);
-                    console.log(L, 'drawHoverLine px:', px);
-                    return px;
-                } catch (e1) {
-                    console.log(L, 'drawHoverLine OL2 fail:', e1?.message);
-                    try {
-                        // Fallback: use getPixel from map event
-                        const proj = map.getProjectionObject();
-                        const p = new OpenLayers.LonLat(lng, lat).transform(proj, map.getProjectionObject());
-                        return map.getViewPortPxFromLonLat(p);
-                    } catch (e2) { console.log(L, 'drawHoverLine fallback fail:', e2?.message); return null; }
-                }
-            };
-            const px1 = getPx(poiLoc.lat, poiLoc.lng);
-            const px2 = getPx(gLoc.lat, gLoc.lng);
-            if (!px1 || !px2) return;
+            if (!sdk?.Map) return;
             clearHoverLine();
-            const container = map.viewPortDiv || map.div;
-            if (!container) return;
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', px1.x); line.setAttribute('y1', px1.y);
-            line.setAttribute('x2', px2.x); line.setAttribute('y2', px2.y);
-            line.setAttribute('stroke', '#4285f4');
-            line.setAttribute('stroke-width', '3');
-            line.setAttribute('stroke-dasharray', '8,6');
-            line.setAttribute('stroke-opacity', '0.85');
-            svg.appendChild(line);
-            container.appendChild(svg);
-            _hoverSvg = svg;
+            sdk.Map.setLayerVisibility({ layerName: GL_LINE_LAYER, visibility: true });
+            const from = turf.point([poiLoc.lng, poiLoc.lat]);
+            const to = turf.point([gLoc.lng, gLoc.lat]);
+            const line = turf.lineString([
+                from.geometry.coordinates,
+                to.geometry.coordinates
+            ], { styleName: 'glLine' }, { id: 'gl_hover_line' });
+            sdk.Map.addFeatureToLayer({ layerName: GL_LINE_LAYER, feature: line });
         } catch (_) {}
     }
 
     function clearHoverLine() {
-        if (_hoverSvg) {
-            try { _hoverSvg.remove(); } catch (_) {}
-            _hoverSvg = null;
-        }
+        try {
+            if (sdk?.Map) sdk.Map.removeAllFeaturesFromLayer({ layerName: GL_LINE_LAYER });
+        } catch (_) {}
     }
 
     async function go() {
@@ -147,6 +140,7 @@
 
         sdk = uw.getWmeSdk({ scriptId: 'gl', scriptName: 'GL' });
         console.log(L, 'SDK ok');
+        initHoverLayer();
 
         // --- Register sidebar tab ---
         try {
@@ -164,7 +158,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.18.2</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.0</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -235,11 +229,10 @@
             // Checkbox: show line
             const chkLine = tabPane.querySelector('#gl-chk-line');
             if (chkLine) {
-                chkLine.addEventListener('change', () => {
-                    const on = chkLine.hasAttribute('checked');
-                    LS.setShowLine(on);
-                    console.log(L, 'showLine changed:', on);
-                    if (!on) clearHoverLine();
+                chkLine.addEventListener('change', (e) => {
+                    LS.setShowLine(e.target.checked);
+                    console.log(L, 'showLine changed:', e.target.checked);
+                    if (!e.target.checked) clearHoverLine();
                 });
             }
             // Input: radius

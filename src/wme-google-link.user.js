@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.17.1
+// @version             1.18.0
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.17.1 loaded =====');
+    console.log('[GL] ===== v1.18.0 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -34,6 +34,8 @@
         setShowUnlinkedOnly: (v) => LS.set('showUnlinkedOnly', v),
         maxRadius: () => LS.get('maxRadius', 5000),
         setMaxRadius: (v) => LS.set('maxRadius', v),
+        showLine: () => LS.get('showLine', false),
+        setShowLine: (v) => LS.set('showLine', v),
     };
 
     // Force ALL shadow roots to be open
@@ -78,6 +80,44 @@
         return m < 1000 ? Math.round(m) + ' м' : (m/1000).toFixed(1) + ' км';
     }
 
+    // --- Hover line: dashed line from POI to Google result ---
+    let _hoverLayer = null;
+    let _hoverFeature = null;
+
+    function drawHoverLine(poiLoc, gLoc) {
+        if (!LS.showLine()) return;
+        try {
+            const map = uw.W?.map;
+            if (!map || !uw.OpenLayers) return;
+            if (!_hoverLayer) {
+                _hoverLayer = new uw.OpenLayers.Layer.Vector('GL Hover Line', {
+                    styleMap: new uw.OpenLayers.StyleMap({
+                        'default': new uw.OpenLayers.Style({
+                            strokeColor: '#4285f4',
+                            strokeOpacity: 0.8,
+                            strokeWidth: 3,
+                            strokeDashstyle: 'dash'
+                        })
+                    })
+                });
+                map.addLayer(_hoverLayer);
+            }
+            clearHoverLine();
+            const start = new uw.OpenLayers.Geometry.Point(poiLoc.lng, poiLoc.lat);
+            const end = new uw.OpenLayers.Geometry.Point(gLoc.lng, gLoc.lat);
+            const line = new uw.OpenLayers.Geometry.LineString([start, end]);
+            _hoverFeature = new uw.OpenLayers.Feature.Vector(line);
+            _hoverLayer.addFeatures([_hoverFeature]);
+        } catch (_) {}
+    }
+
+    function clearHoverLine() {
+        if (_hoverLayer && _hoverFeature) {
+            try { _hoverLayer.removeFeatures([_hoverFeature]); } catch (_) {}
+            _hoverFeature = null;
+        }
+    }
+
     async function go() {
         console.log(L, 'init...');
 
@@ -101,15 +141,17 @@
             // Settings section
             const showDist = LS.showDistance();
             const showUnlinked = LS.showUnlinkedOnly();
+            const showLine = LS.showLine();
             const radius = LS.maxRadius();
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.16.0</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.18.0</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
                         <wz-checkbox id="gl-chk-unlinked" ${showUnlinked ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>🔗 Тільки без посилань</wz-checkbox>
+                        <wz-checkbox id="gl-chk-line" ${showLine ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📏 Лінія</wz-checkbox>
                         <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
                             Радіус: <input id="gl-radius" type="number" min="100" max="50000" step="100" value="${radius}" ${!enabled ? 'disabled' : ''} style="width:65px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" /> м
                         </span>
@@ -129,10 +171,12 @@
                     // Enable/disable other controls
                     const chkD = tabPane.querySelector('#gl-chk-dist');
                     const chkU = tabPane.querySelector('#gl-chk-unlinked');
+                    const chkL = tabPane.querySelector('#gl-chk-line');
                     const rIn = tabPane.querySelector('#gl-radius');
                     const hint = tabPane.querySelector('div[style*="color:#888"]');
                     if (chkD) chkD.disabled = !enabled;
                     if (chkU) chkU.disabled = !enabled;
+                    if (chkL) chkL.disabled = !enabled;
                     if (rIn) rIn.disabled = !enabled;
                     if (hint) hint.textContent = enabled ? 'Обери POI на карті для пошуку' : 'Скрипт вимкнено';
                     if (enabled) {
@@ -169,6 +213,17 @@
                 });
             }
 
+
+            // Checkbox: show line
+            const chkLine = tabPane.querySelector('#gl-chk-line');
+            if (chkLine) {
+                chkLine.addEventListener('click', () => {
+                    const on = chkLine.hasAttribute('checked');
+                    on ? chkLine.removeAttribute('checked') : chkLine.setAttribute('checked', '');
+                    LS.setShowLine(!on);
+                    if (!LS.showLine()) clearHoverLine();
+                });
+            }
             // Input: radius
             const radiusEl = tabPane.querySelector('#gl-radius');
             if (radiusEl) {
@@ -757,8 +812,8 @@ function ll(vid) {
             }
             const streetWarn = streetLabel ? `<br><small style="color:#f9a825;">${streetLabel}</small>` : '';
             d.innerHTML = `<b>${res.name || ''}</b><br><small style="color:#888;">${res.formatted_address || ''}</small>${distHtml}${streetWarn}<br><small style="color:#aaa;word-break:break-all;font-size:10px;">${res.place_id}</small>`;
-            d.onmouseenter = () => d.style.background = '#f0f6ff';
-            d.onmouseleave = () => d.style.background = '#fff';
+            d.onmouseenter = () => { d.style.background = '#f0f6ff'; if (loc && res.geometry?.location) { try { drawHoverLine(loc, { lat: res.geometry.location.lat(), lng: res.geometry.location.lng() }); } catch (_) {} } };
+            d.onmouseleave = () => { d.style.background = '#fff'; clearHoverLine(); };
             d.onclick = () => {
                 if (isSuspect && !d.dataset.confirmed) {
                     d.style.background = '#fce8e6';
@@ -801,7 +856,7 @@ function ll(vid) {
             </div>
         `;
         document.body.appendChild(p);
-        document.getElementById('gl-close').addEventListener('click', () => { lastVid = null; p.remove(); });
+        document.getElementById('gl-close').addEventListener('click', () => { lastVid = null; clearHoverLine(); p.remove(); });
 
         // Ensure PlacesService
         if (!ps) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.19.5
+// @version             1.19.6
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.19.5 loaded =====');
+    console.log('[GL] ===== v1.19.6 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -171,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.5</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.6</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -932,6 +932,20 @@ function ll(vid) {
             let ai = 0;
             function tryAlt() {
                 if (ai >= altStreets.length) {
+                    // 3) Fallback: try without house number
+                    if (poiHN) {
+                        const noHN = query.split(',').filter((_, i) => i !== 1).join(', ');
+                        console.log(L, 'Fallback (no HN):', noHN);
+                        rEl.innerHTML = '<div style="color:#666;">⏳ Спроба без номера...</div>';
+                        ps.textSearch({ query: noHN, location: loc ? new google.maps.LatLng(loc.lat, loc.lng) : undefined, radius: loc ? radius : undefined }, (res3, st3) => {
+                            if (!document.getElementById('gl-r')) return;
+                            showResults(vid, res3, st3, rEl, poiStreet, poiHN, loc, radius, poiRawStreet);
+                            if (!document.getElementById('gl-r')?.innerHTML.includes('gl-r') || document.getElementById('gl-r')?.children.length === 0) {
+                                rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
+                            }
+                        });
+                        return;
+                    }
                     rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
                     return;
                 }

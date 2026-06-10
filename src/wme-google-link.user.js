@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.19.2
+// @version             1.19.3
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.19.2 loaded =====');
+    console.log('[GL] ===== v1.19.3 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -171,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.2</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.3</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -182,6 +182,10 @@
                         </span>
                     </div>
                     <div style="font-size:12px;color:#888;">${enabled ? 'Обери POI на карті для пошуку' : 'Скрипт вимкнено'}</div>
+                    <div style="margin-top:12px;padding-top:6px;border-top:1px solid #eee;width:100%;box-sizing:border-box;">
+                        <div style="background:#005bbb;color:#fff;padding:8px;font-size:25px;text-align:center;width:100%;box-sizing:border-box;">made in</div>
+                        <div style="background:#ffd500;color:#000;padding:8px;font-size:25px;text-align:center;width:100%;box-sizing:border-box;">Ukraine</div>
+                    </div>
                 </div>
             `;
 

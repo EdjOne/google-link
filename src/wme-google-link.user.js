@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.18.1
+// @version             1.18.2
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.18.1 loaded =====');
+    console.log('[GL] ===== v1.18.2 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -164,7 +164,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.18.1</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.18.2</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -235,11 +235,11 @@
             // Checkbox: show line
             const chkLine = tabPane.querySelector('#gl-chk-line');
             if (chkLine) {
-                chkLine.addEventListener('click', () => {
+                chkLine.addEventListener('change', () => {
                     const on = chkLine.hasAttribute('checked');
-                    on ? chkLine.removeAttribute('checked') : chkLine.setAttribute('checked', '');
-                    LS.setShowLine(!on);
-                    if (!LS.showLine()) clearHoverLine();
+                    LS.setShowLine(on);
+                    console.log(L, 'showLine changed:', on);
+                    if (!on) clearHoverLine();
                 });
             }
             // Input: radius

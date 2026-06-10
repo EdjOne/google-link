@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.19.3
+// @version             1.19.4
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.19.3 loaded =====');
+    console.log('[GL] ===== v1.19.4 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -171,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.3</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.4</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -874,7 +874,14 @@ function ll(vid) {
             </div>
         `;
         document.body.appendChild(p);
-        document.getElementById('gl-close').addEventListener('click', () => { lastVid = null; clearHoverLine(); p.remove(); });
+        document.getElementById('gl-close').addEventListener('click', () => {
+            lastVid = null;
+            clearHoverLine();
+            p.remove();
+            // Deselect POI so panel doesn't reappear
+            try { uw.W?.selectionManager?.unselectAll?.(); } catch (_) {}
+            try { sdk?.Editing?.setSelection?.({ ids: [] }); } catch (_) {}
+        });
 
         // Ensure PlacesService
         if (!ps) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.19.1
+// @version             1.19.2
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.19.1 loaded =====');
+    console.log('[GL] ===== v1.19.2 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -171,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.1</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.2</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -375,22 +375,12 @@
 function ll(vid) {
         try {
             const v = sdk.DataModel.Venues.getById({ venueId: vid });
-            const g = v?.geometry;
-            if (!g) return null;
-            const c = g.coordinates;
-            // Point: [lng, lat]
-            if (Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number') {
-                const lat = +c[1], lng = +c[0];
-                if (isFinite(lat) && isFinite(lng)) return { lat, lng };
-            }
-            // Polygon: [[[lng, lat], ...]] — take centroid of first ring
-            if (Array.isArray(c) && Array.isArray(c[0]) && Array.isArray(c[0][0])) {
-                const ring = c[0];
-                let slat = 0, slng = 0;
-                for (const pt of ring) { slat += pt[1]; slng += pt[0]; }
-                const lat = slat / ring.length, lng = slng / ring.length;
-                if (isFinite(lat) && isFinite(lng)) return { lat, lng };
-            }
+            if (!v?.geometry) return null;
+            // Use turf.centroid for proper geometric center (matches E50)
+            const c = turf.centroid(v.geometry);
+            if (!c?.geometry?.coordinates) return null;
+            const lng = c.geometry.coordinates[0], lat = c.geometry.coordinates[1];
+            if (isFinite(lat) && isFinite(lng)) return { lat, lng };
         } catch (_) {}
         return null;
     }

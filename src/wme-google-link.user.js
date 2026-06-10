@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.17.0
+// @version             1.17.1
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.17.0 loaded =====');
+    console.log('[GL] ===== v1.17.1 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -717,7 +717,7 @@ function ll(vid) {
         let shown = 0;
         let resultDist = 0;
         for (const res of results) {
-            if (!res.place_id?.startsWith('ChIJ')) { console.log(L, 'Skip (no ChIJ):', res.name, '| id:', res.place_id); continue; }
+            if (!res.place_id) { console.log(L, 'Skip (no place_id):', res.name); continue; }
             const gHN = extractHouseNum(res.formatted_address || '');
             const gStreet = extractStreet(res.formatted_address || '');
             const gRawFirst = (res.formatted_address || '').split(',')[0] || '';

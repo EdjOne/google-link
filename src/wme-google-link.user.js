@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.18.0
+// @version             1.18.1
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.18.0 loaded =====');
+    console.log('[GL] ===== v1.18.1 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -81,40 +81,58 @@
     }
 
     // --- Hover line: dashed line from POI to Google result ---
-    let _hoverLayer = null;
-    let _hoverFeature = null;
+    // --- Hover line: SVG dashed line from POI to Google result ---
+    let _hoverSvg = null;
 
     function drawHoverLine(poiLoc, gLoc) {
+        console.log(L, 'drawHoverLine: showLine=', LS.showLine(), 'poiLoc=', poiLoc, 'gLoc=', gLoc);
         if (!LS.showLine()) return;
         try {
             const map = uw.W?.map;
-            if (!map || !uw.OpenLayers) return;
-            if (!_hoverLayer) {
-                _hoverLayer = new uw.OpenLayers.Layer.Vector('GL Hover Line', {
-                    styleMap: new uw.OpenLayers.StyleMap({
-                        'default': new uw.OpenLayers.Style({
-                            strokeColor: '#4285f4',
-                            strokeOpacity: 0.8,
-                            strokeWidth: 3,
-                            strokeDashstyle: 'dash'
-                        })
-                    })
-                });
-                map.addLayer(_hoverLayer);
-            }
+            if (!map) { console.log(L, 'drawHoverLine: no map'); return; }
+            // Get pixel coords from lat/lng using map projection
+            const getPx = (lat, lng) => {
+                try {
+                    // OL2 style: map.getLayerPxFromLonLat
+                    const ll = new OpenLayers.LonLat(lng, lat);
+                    const px = map.getLayerPxFromLonLat(ll);
+                    console.log(L, 'drawHoverLine px:', px);
+                    return px;
+                } catch (e1) {
+                    console.log(L, 'drawHoverLine OL2 fail:', e1?.message);
+                    try {
+                        // Fallback: use getPixel from map event
+                        const proj = map.getProjectionObject();
+                        const p = new OpenLayers.LonLat(lng, lat).transform(proj, map.getProjectionObject());
+                        return map.getViewPortPxFromLonLat(p);
+                    } catch (e2) { console.log(L, 'drawHoverLine fallback fail:', e2?.message); return null; }
+                }
+            };
+            const px1 = getPx(poiLoc.lat, poiLoc.lng);
+            const px2 = getPx(gLoc.lat, gLoc.lng);
+            if (!px1 || !px2) return;
             clearHoverLine();
-            const start = new uw.OpenLayers.Geometry.Point(poiLoc.lng, poiLoc.lat);
-            const end = new uw.OpenLayers.Geometry.Point(gLoc.lng, gLoc.lat);
-            const line = new uw.OpenLayers.Geometry.LineString([start, end]);
-            _hoverFeature = new uw.OpenLayers.Feature.Vector(line);
-            _hoverLayer.addFeatures([_hoverFeature]);
+            const container = map.viewPortDiv || map.div;
+            if (!container) return;
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', px1.x); line.setAttribute('y1', px1.y);
+            line.setAttribute('x2', px2.x); line.setAttribute('y2', px2.y);
+            line.setAttribute('stroke', '#4285f4');
+            line.setAttribute('stroke-width', '3');
+            line.setAttribute('stroke-dasharray', '8,6');
+            line.setAttribute('stroke-opacity', '0.85');
+            svg.appendChild(line);
+            container.appendChild(svg);
+            _hoverSvg = svg;
         } catch (_) {}
     }
 
     function clearHoverLine() {
-        if (_hoverLayer && _hoverFeature) {
-            try { _hoverLayer.removeFeatures([_hoverFeature]); } catch (_) {}
-            _hoverFeature = null;
+        if (_hoverSvg) {
+            try { _hoverSvg.remove(); } catch (_) {}
+            _hoverSvg = null;
         }
     }
 
@@ -146,7 +164,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.18.0</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.18.1</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>

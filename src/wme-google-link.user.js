@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.19.0
+// @version             1.19.1
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.19.0 loaded =====');
+    console.log('[GL] ===== v1.19.1 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -95,10 +95,21 @@
                         predicate: (props) => props?.styleName === 'glLine',
                         style: {
                             strokeWidth: 3,
-                            strokeColor: '#4285f4',
+                            strokeColor: '#fff',
                             strokeOpacity: 0.85,
                             strokeDashstyle: 'dash',
                             graphicZIndex: 9999,
+                        }
+                    },
+                    {
+                        predicate: (props) => props?.styleName === 'glDot',
+                        style: {
+                            pointRadius: 6,
+                            fillColor: '#fff',
+                            fillOpacity: 0.9,
+                            strokeColor: '#fff',
+                            strokeWidth: 2,
+                            graphicZIndex: 10000,
                         }
                     }
                 ]
@@ -119,7 +130,9 @@
                 from.geometry.coordinates,
                 to.geometry.coordinates
             ], { styleName: 'glLine' }, { id: 'gl_hover_line' });
+            const dot = turf.point(to.geometry.coordinates, { styleName: 'glDot' }, { id: 'gl_hover_dot' });
             sdk.Map.addFeatureToLayer({ layerName: GL_LINE_LAYER, feature: line });
+            sdk.Map.addFeatureToLayer({ layerName: GL_LINE_LAYER, feature: dot });
         } catch (_) {}
     }
 
@@ -158,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.0</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.1</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>

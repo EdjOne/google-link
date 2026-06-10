@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.19.7
+// @version             1.19.8
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.19.7 loaded =====');
+    console.log('[GL] ===== v1.19.8 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -171,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.7</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.19.8</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -941,8 +941,21 @@ function ll(vid) {
                         rEl.innerHTML = '<div style="color:#666;">⏳ Спроба без номера...</div>';
                         ps.textSearch({ query: noHN, location: loc ? new google.maps.LatLng(loc.lat, loc.lng) : undefined, radius: loc ? radius : undefined }, (res3, st3) => {
                             if (!document.getElementById('gl-r')) return;
-                            showResults(vid, res3, st3, rEl, poiStreet, poiHN, loc, radius, poiRawStreet);
-                            if (!document.getElementById('gl-r')?.innerHTML.includes('gl-r') || document.getElementById('gl-r')?.children.length === 0) {
+                            if (showResults(vid, res3, st3, rEl, poiStreet, poiHN, loc, radius, poiRawStreet)) return;
+                            // 4) Fallback: try street name only (no type prefix, no number)
+                            const rawName = poiRawStreet.replace(STREET_PREFIXES, '').trim();
+                            if (rawName) {
+                                const streetOnly = rawName + ', ' + query.split(',').slice(2).join(', ');
+                                console.log(L, 'Fallback (street only):', streetOnly);
+                                rEl.innerHTML = '<div style="color:#666;">⏳ Спроба за назвою вулиці...</div>';
+                                ps.textSearch({ query: streetOnly, location: loc ? new google.maps.LatLng(loc.lat, loc.lng) : undefined, radius: loc ? radius : undefined }, (res4, st4) => {
+                                    if (!document.getElementById('gl-r')) return;
+                                    showResults(vid, res4, st4, rEl, poiStreet, poiHN, loc, radius, poiRawStreet);
+                                    if (!document.getElementById('gl-r')?.children.length) {
+                                        rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
+                                    }
+                                });
+                            } else {
                                 rEl.innerHTML = '<div style="color:#999;">Нічого не знайдено</div>';
                             }
                         });

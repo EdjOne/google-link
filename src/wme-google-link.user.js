@@ -576,7 +576,10 @@ function ll(vid) {
                 pointDiv.style.textShadow = '';
             }
             // Rebuild CSS rules without this venue
-            applyHighlightsIfNeeded();
+            if (LS.showUnlinkedOnly()) {
+                // re-run full highlight to regenerate CSS rules without this one
+                try { highlightUnlinked(); } catch (_) {}
+            }
         } catch (_) {}
     }
 

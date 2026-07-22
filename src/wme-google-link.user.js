@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.20.8
+// @version             1.20.9
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -20,7 +20,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.20.8 loaded =====');
+    console.log('[GL] ===== v1.20.9 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -174,7 +174,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.8</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.9</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -519,20 +519,30 @@ function ll(vid) {
             if (vid && sdk?.DataModel?.Venues?.getById) {
                 const sv = sdk.DataModel.Venues.getById({ venueId: String(vid) });
                 if (sv?.attributes?.categories?.length) {
-                    return sv.attributes.categories.some(c => {
+                    const cats = sv.attributes.categories;
+                    console.log(L, 'isSkipped SDK cats:', JSON.stringify(cats), 'venue:', sv.name);
+                    const skip = cats.some(c => {
                         const id = String(c?.id || c || '');
                         return SKIP_CATEGORY_PREFIXES.some(p => id.startsWith(p));
                     });
+                    if (skip) console.log(L, '→ SKIP (SDK)', sv.name);
+                    return skip;
                 }
             }
-        } catch (_) {}
+        } catch (e) { console.warn(L, 'isSkipped SDK lookup failed:', e); }
         // Fallback to legacy model attributes
         const cats = venue?.attributes?.categories;
-        if (!Array.isArray(cats)) return false;
-        return cats.some(c => {
-            const id = String(c?.id || c || '');
-            return SKIP_CATEGORY_PREFIXES.some(p => id.startsWith(p));
-        });
+        if (Array.isArray(cats) && cats.length) {
+            console.log(L, 'isSkipped legacy cats:', JSON.stringify(cats), 'venue:', venue?.attributes?.name);
+            const skip = cats.some(c => {
+                const id = String(c?.id || c || '');
+                return SKIP_CATEGORY_PREFIXES.some(p => id.startsWith(p));
+            });
+            if (skip) console.log(L, '→ SKIP (legacy)');
+            return skip;
+        }
+        console.log(L, 'isSkipped — NO CATEGORIES for venue:', venue?.attributes?.name || '(unnamed)');
+        return false;
     }
 
     function highlightUnlinked() {

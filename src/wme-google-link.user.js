@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.20.5
+// @version             1.20.6
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.20.5 loaded =====');
+    console.log('[GL] ===== v1.20.6 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -171,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.5</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.6</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -282,7 +282,7 @@
         try { uw.W.selectionManager.events.register('selectionchanged', null, onSel); } catch (_) {}
         setInterval(poll, 1000);
 
-        // Highlight unlinked on map events (zoom, pan, save) — always register, check checkbox at call time
+        // Highlight unlinked on map events (zoom, pan, save, data load) — always register, check checkbox at call time
         function applyHighlightsIfNeeded() {
             if (!enabled) return;
             if (LS.showUnlinkedOnly()) highlightUnlinked();
@@ -293,6 +293,8 @@
         // Re-highlight after save (DOM redraws POI markers)
         try { uw.W.model.events.register('save', null, () => setTimeout(applyHighlightsIfNeeded, 500)); } catch (_) {}
         try { sdk.Events.on({ eventName: 'wme-after-save', eventHandler: () => setTimeout(applyHighlightsIfNeeded, 500) }); } catch (_) {}
+        // Re-highlight after map data loads (fixes: flash-on-load → vanish after WME redraws DOM)
+        try { sdk.Events.on({ eventName: 'wme-map-data-loaded', eventHandler: () => setTimeout(applyHighlightsIfNeeded, 1000) }); } catch (_) {}
 
         console.log(L, '=== READY ===');
     }

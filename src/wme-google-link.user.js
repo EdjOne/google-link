@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.20.6
+// @version             1.20.7
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -17,7 +17,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.20.6 loaded =====');
+    console.log('[GL] ===== v1.20.7 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -171,7 +171,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.6</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.7</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -487,6 +487,13 @@ function ll(vid) {
     }
 
     // --- Highlight unlinked POIs on map (like PlaceNames PLUS) ---
+    // CSS-driven highlight — survives WME hover (inline !important marker beats WME's inline styles)
+    const GL_HL_STYLE_ID = 'gl-hl-css';
+    function getHlStyle() {
+        let el = document.getElementById(GL_HL_STYLE_ID);
+        if (!el) { el = document.createElement('style'); el.id = GL_HL_STYLE_ID; document.head.appendChild(el); }
+        return el;
+    }
     function resetHighlights() {
         // Reset label divs
         document.querySelectorAll('.map-marker[data-id]').forEach(div => {
@@ -494,23 +501,9 @@ function ll(vid) {
             div.style.fontWeight = '';
             div.style.textShadow = '';
         });
-        // Reset SVG icon strokes
-        try {
-            const venues = uw.W?.model?.venues;
-            if (!venues) return;
-            const venueLayer = uw.W?.map?.venueLayer;
-            if (!venueLayer) return;
-            for (const mark in venues.objects) {
-                if (venueLayer.featureMap.has(mark)) {
-                    const featGeomId = venueLayer.featureMap.get(mark).geometry.id;
-                    const svgIcon = document.getElementById(featGeomId);
-                    if (svgIcon) {
-                        svgIcon.setAttribute('stroke', 'white');
-                        svgIcon.setAttribute('stroke-width', '2');
-                    }
-                }
-            }
-        } catch (_) {}
+        // Clear CSS highlight rules
+        const el = document.getElementById(GL_HL_STYLE_ID);
+        if (el) el.textContent = '';
     }
 
     // --- Check if venue should be skipped based on category ---
@@ -532,6 +525,8 @@ function ll(vid) {
             if (!venues) return;
             const venueLayer = uw.W?.map?.venueLayer;
             if (!venueLayer) return;
+            const hlStyle = getHlStyle();
+            let cssRules = '';
             for (const mark in venues.objects) {
                 const venue = venues.getObjectById(mark);
                 if (!venue) continue;
@@ -541,13 +536,13 @@ function ll(vid) {
                 if (isRH) continue; // skip residential (like PlaceNames PLUS)
                 if (isSkippedCategory(venue)) continue; // skip nature + parking
 
-                // Highlight SVG icon
+                // Highlight SVG icon via CSS rule with !important (survives WME hover)
                 if (venueLayer.featureMap.has(mark)) {
                     const featGeomId = venueLayer.featureMap.get(mark).geometry.id;
                     const svgIcon = document.getElementById(featGeomId);
                     if (svgIcon) {
-                        svgIcon.setAttribute('stroke', '#0ff');
-                        svgIcon.setAttribute('stroke-width', '3');
+                        svgIcon.dataset.glHl = '1';
+                        cssRules += `#${featGeomId}{stroke:#0ff!important;stroke-width:3px!important;filter:drop-shadow(0 0 3px #0ff)!important;}\n`;
                     }
                 }
 
@@ -559,6 +554,7 @@ function ll(vid) {
                     pointDiv.style.textShadow = '0 0 4px #0ff';
                 }
             }
+            hlStyle.textContent = cssRules;
         } catch (e) { console.warn(L, 'highlightUnlinked failed:', e); }
     }
 
@@ -570,8 +566,7 @@ function ll(vid) {
                 const featGeomId = venueLayer.featureMap.get(vid).geometry.id;
                 const svgIcon = document.getElementById(featGeomId);
                 if (svgIcon) {
-                    svgIcon.setAttribute('stroke', 'white');
-                    svgIcon.setAttribute('stroke-width', '2');
+                    delete svgIcon.dataset.glHl;
                 }
             }
             const pointDiv = document.querySelector('.map-marker[data-id="' + vid + '"]');
@@ -580,6 +575,8 @@ function ll(vid) {
                 pointDiv.style.fontWeight = '';
                 pointDiv.style.textShadow = '';
             }
+            // Rebuild CSS rules without this venue
+            applyHighlightsIfNeeded();
         } catch (_) {}
     }
 

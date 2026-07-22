@@ -6,6 +6,9 @@
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
 // @author              EdjOne
+// @updateURL           https://raw.githubusercontent.com/EdjOne/google-link/master/src/wme-google-link.user.js
+// @downloadURL         https://raw.githubusercontent.com/EdjOne/google-link/master/src/wme-google-link.user.js
+// @supportURL          https://github.com/EdjOne/google-link/issues
 // @match               *://www.waze.com/editor*
 // @match               *://www.waze.com/*/editor*
 // @match               *://editor.waze.com/*

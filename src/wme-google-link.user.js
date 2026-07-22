@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.20.7
+// @version             1.20.8
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -20,7 +20,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.20.7 loaded =====');
+    console.log('[GL] ===== v1.20.8 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -174,7 +174,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.7</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.8</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -513,6 +513,20 @@ function ll(vid) {
     // WME subcategory IDs: 49xx = Parking, 69xx = Natural/Geographic
     const SKIP_CATEGORY_PREFIXES = ['49', '69'];
     function isSkippedCategory(venue) {
+        // Try SDK model first (always has categories populated)
+        try {
+            const vid = venue?.id || venue?.attributes?.id;
+            if (vid && sdk?.DataModel?.Venues?.getById) {
+                const sv = sdk.DataModel.Venues.getById({ venueId: String(vid) });
+                if (sv?.attributes?.categories?.length) {
+                    return sv.attributes.categories.some(c => {
+                        const id = String(c?.id || c || '');
+                        return SKIP_CATEGORY_PREFIXES.some(p => id.startsWith(p));
+                    });
+                }
+            }
+        } catch (_) {}
+        // Fallback to legacy model attributes
         const cats = venue?.attributes?.categories;
         if (!Array.isArray(cats)) return false;
         return cats.some(c => {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.20.11
+// @version             1.20.12
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -20,7 +20,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.20.11 loaded =====');
+    console.log('[GL] ===== v1.20.12 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -174,7 +174,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.11</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.12</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -514,10 +514,14 @@ function ll(vid) {
     const SKIP_CATEGORIES = new Set([
         // Nature / Geographic
         'SEA_LAKE_POOL', 'FOREST', 'FOREST_GROVE', 'WOODS', 'WOODLAND',
-        'MOUNTAIN', 'RIVER_STREAM', 'BEACH',
-        'NATURAL_FEATURES', 'VALLEY', 'ISLAND', 'PARK', 'DESERT', 'GLACIER',
+        'MOUNTAIN', 'MOUNTAIN_RANGE', 'RIVER', 'RIVER_STREAM', 'BEACH',
+        'NATURAL_FEATURES', 'NATURE_RESERVE', 'VALLEY', 'ISLAND',
+        'PARK', 'NATIONAL_PARK', 'DESERT', 'GLACIER', 'MEADOW', 'FARM',
+        'WETLAND', 'SWAMP', 'MARSH', 'LAKE', 'POND', 'RESERVOIR',
+        'GARDEN', 'BOTANICAL_GARDEN', 'ZOO', 'FORESTRY',
         // Parking
-        'PARKING_LOT', 'PARKING_GARAGE',
+        'PARKING', 'PARKING_LOT', 'PARKING_GARAGE', 'CAR_PARK',
+        'MULTI_STOREY_CAR_PARK', 'PARKING_SPACE', 'PARKING_AREA',
     ]);
     // Also check by ID prefix (SDK returns objects with id like 6901)
     const SKIP_CATEGORY_PREFIXES = ['49', '69'];

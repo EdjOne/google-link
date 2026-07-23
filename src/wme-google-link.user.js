@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.20.10
+// @version             1.20.11
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -20,7 +20,7 @@
 // ==/UserScript==
 
 (function () {
-    console.log('[GL] ===== v1.20.10 loaded =====');
+    console.log('[GL] ===== v1.20.11 loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -174,7 +174,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.10</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.11</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>
@@ -513,12 +513,23 @@ function ll(vid) {
     // WME category names (strings) for nature/geographic features and parking
     const SKIP_CATEGORIES = new Set([
         // Nature / Geographic
-        'SEA_LAKE_POOL', 'FOREST', 'MOUNTAIN', 'RIVER_STREAM', 'BEACH',
+        'SEA_LAKE_POOL', 'FOREST', 'FOREST_GROVE', 'WOODS', 'WOODLAND',
+        'MOUNTAIN', 'RIVER_STREAM', 'BEACH',
         'NATURAL_FEATURES', 'VALLEY', 'ISLAND', 'PARK', 'DESERT', 'GLACIER',
         // Parking
         'PARKING_LOT', 'PARKING_GARAGE',
     ]);
+    // Also check by ID prefix (SDK returns objects with id like 6901)
+    const SKIP_CATEGORY_PREFIXES = ['49', '69'];
     function isSkippedCategory(venue) {
+        function catMatch(c) {
+            // Match by name string
+            if (SKIP_CATEGORIES.has(c?.name || c)) return true;
+            // Match by ID prefix (e.g. 6901 → 69xx for nature)
+            const id = String(c?.id || c?.id || '');
+            if (id && SKIP_CATEGORY_PREFIXES.some(p => id.startsWith(p))) return true;
+            return false;
+        }
         // Try SDK model first (always has categories populated)
         try {
             const vid = venue?.id || venue?.attributes?.id;
@@ -526,16 +537,18 @@ function ll(vid) {
                 const sv = sdk.DataModel.Venues.getById({ venueId: String(vid) });
                 if (sv?.attributes?.categories?.length) {
                     const cats = sv.attributes.categories;
-                    const skip = cats.some(c => SKIP_CATEGORIES.has(c?.name || c));
-                    if (skip) return true;
+                    console.log(L, 'isSkipped SDK cats:', JSON.stringify(cats), 'venue:', sv.name);
+                    if (cats.some(c => catMatch(c))) return true;
                 }
             }
         } catch (e) { console.warn(L, 'isSkipped SDK lookup failed:', e); }
         // Fallback to legacy model attributes
         const cats = venue?.attributes?.categories;
         if (Array.isArray(cats) && cats.length) {
-            return cats.some(c => SKIP_CATEGORIES.has(c?.name || c));
+            console.log(L, 'isSkipped legacy cats:', JSON.stringify(cats), 'venue:', venue?.attributes?.name);
+            return cats.some(c => catMatch(c));
         }
+        console.log(L, 'isSkipped — NO CATEGORIES for venue:', venue?.attributes?.name || '(unnamed)');
         return false;
     }
 

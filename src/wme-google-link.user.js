@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.20.12
+// @version             1.20.13
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -747,12 +747,12 @@ function ll(vid) {
                             if (sel?.ids?.length === 1) unhighlightVenue(String(sel.ids[0]));
                         } catch (_) {}
                         lastVid = null;
-                    }, 300);
+                    }, 100);
                 }, 520);
             } else {
                 waitAndFill(addr, d, attempt + 1);
             }
-        }, 300);
+        }, 100);
     }
 
     function waitForPac(d, addr, attempt) {
@@ -796,7 +796,7 @@ function ll(vid) {
                 }
             }
             waitForPac(d, addr, attempt + 1);
-        }, 300);
+        }, 100);
     }
 
     function linkPlace(addr, placeId, d) {

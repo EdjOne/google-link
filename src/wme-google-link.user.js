@@ -19,8 +19,12 @@
 // @run-at              document-start
 // ==/UserScript==
 
+// Single source of truth for the version shown in UI/logs.
+// Keep in sync with @version above (I'll do it on every bump).
+const GL_VERSION = '1.20.13';
+
 (function () {
-    console.log('[GL] ===== v1.20.13 loaded =====');
+    console.log('[GL] ===== v' + GL_VERSION + ' loaded =====');
 
     // --- Enable/Disable toggle (localStorage) ---
     const ENABLED_KEY = 'gl_enabled';
@@ -174,7 +178,7 @@
 
             tabPane.innerHTML = `
                 <div style="padding:10px;">
-                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v1.20.13</small></h3>
+                    <h3 style="margin:0 0 8px 0;">🔍 Google Link <small style="font-weight:normal;color:#aaa;">v${GL_VERSION}</small></h3>
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                         <wz-checkbox id="gl-chk-enabled" ${enabled ? 'checked' : ''}>⚡ Увімкнено</wz-checkbox>
                         <wz-checkbox id="gl-chk-dist" ${showDist ? 'checked' : ''} ${!enabled ? 'disabled' : ''}>📍 Відстань</wz-checkbox>

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                Google Link (WME)
 // @name:uk             Google Link (WME)
-// @version             1.20.13
+// @version             1.20.14
 // @description         🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:uk      🔍 Шукає Google Place за адресою POI. Клікни на venue → панель покаже Google результати → "🔗 Link" відкриє Maps. https://github.com/EdjOne/google-link
 // @description:en      🔍 Finds Google Place by POI address. Click a venue → panel shows Google results → "🔗 Link" opens Maps. https://github.com/EdjOne/google-link
@@ -21,7 +21,7 @@
 
 // Single source of truth for the version shown in UI/logs.
 // Keep in sync with @version above (I'll do it on every bump).
-const GL_VERSION = '1.20.13';
+const GL_VERSION = '1.20.14';
 
 (function () {
     console.log('[GL] ===== v' + GL_VERSION + ' loaded =====');
@@ -368,6 +368,7 @@ const GL_VERSION = '1.20.13';
             show(vid);
         } else if (!vid && lastVid) {
             lastVid = null;
+            glResultItems = [];
             const p = document.getElementById('gl-p'); if (p) p.remove();
         }
     }
@@ -830,9 +831,27 @@ function ll(vid) {
         }, attempt === 0 ? 500 : 300);
     }
 
+    // --- Hotkeys: digits 1-9 select result in panel (v1.20.14) ---
+    let glResultItems = []; // currently shown, clickable results (in display order)
+    document.addEventListener('keydown', (e) => {
+        if (!enabled) return;
+        // ignore when typing in inputs/autocomplete
+        const ae = document.activeElement;
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+        if (ae?.shadowRoot?.querySelector?.('input, textarea')) return;
+        const n = parseInt(e.key, 10);
+        if (!(n >= 1 && n <= 9)) return;
+        const item = glResultItems[n - 1];
+        if (!item) return;
+        e.preventDefault();
+        console.log(L, 'Hotkey', n, '→ result', n);
+        item.click();
+    }, true);
+
     // --- Display search results in the panel ---
     function showResults(vid, results, status, rEl, poiStreet, poiHN, loc, radius, poiRawStreet) {
-        if (status !== 'OK' || !results?.length) return false;
+        if (status !== 'OK' || !results?.length) { glResultItems = []; return false; }
+        glResultItems = [];
         rEl.innerHTML = '';
         const showDist = LS.showDistance();
         const poiType = extractStreetType(poiRawStreet || '');
@@ -898,6 +917,11 @@ function ll(vid) {
                 } catch (e) { d.innerHTML += '<br><small style="color:#ea4335;">❌ ' + e.message + '</small>'; }
             };
             rEl.appendChild(d);
+            // Number badge + hotkey registration (1-9)
+            glResultItems.push(d);
+            if (glResultItems.length <= 9) {
+                d.insertAdjacentHTML('afterbegin', `<span style="display:inline-block;min-width:16px;height:16px;line-height:16px;text-align:center;background:#4285f4;color:#fff;border-radius:3px;font-size:10px;font-weight:bold;margin-right:4px;vertical-align:middle;">${glResultItems.length}</span>`);
+            }
             shown++;
         }
         return shown > 0;
@@ -906,6 +930,7 @@ function ll(vid) {
     async function show(vid) {
         console.log(L, '>>> show() CALLED vid=', vid);
         const old = document.getElementById('gl-p'); if (old) old.remove();
+        glResultItems = [];
         const query = q(vid);
         if (!query) return;
 
